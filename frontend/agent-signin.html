@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Agent Sign In | ErrandEase</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <!-- Primary favicon -->
+    <link rel="icon" type="image/x-icon" href="/frontend/images/favicon.ico" />
+
+    <!-- Modern SVG favicon -->
+    <link rel="icon" type="image/svg+xml" href="/frontend/images/favicon.svg" />
+
+    <!-- Apple Touch Icon (for iOS home screen) -->
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/frontend/images/apple-touch-icon.png"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#10b981",
+              secondary: "#1e293b",
+              "background-light": "#f8fafc",
+              "background-dark": "#0f172a",
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "1rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .auth-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased min-h-screen flex flex-col"
+  >
+    <header class="w-full bg-transparent">
+      <nav
+        class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between"
+      >
+        <a
+          class="flex items-center gap-2 group cursor-pointer"
+          href="index.html"
+        >
+          <div class="bg-primary p-1.5 rounded-lg text-white">
+            <span class="material-symbols-outlined text-2xl">local_mall</span>
+          </div>
+          <span
+            class="text-xl font-[800] tracking-tight text-secondary dark:text-white"
+            >ErrandEase</span
+          >
+        </a>
+        <span
+          class="bg-primary/10 text-primary text-xs font-semibold px-3 py-1.5 rounded-full border border-primary/20"
+        >
+          Agent signin
+        </span>
+      </nav>
+    </header>
+
+    <main class="flex-grow flex items-center justify-center px-6 py-12">
+      <div class="w-full max-w-[520px]">
+        <!-- Sign In Card – Google only -->
+        <div
+          class="auth-card bg-white dark:bg-slate-900 p-8 md:p-10 rounded-xl shadow-2xl shadow-slate-200 dark:shadow-none border border-slate-100 dark:border-slate-800"
+        >
+          <div class="text-center mb-8">
+            <span
+              class="inline-block px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-semibold rounded-full mb-3"
+            >
+              🔐 welcome back, agent
+            </span>
+            <h1 class="text-3xl font-[800] text-secondary dark:text-white mb-2">
+              Sign In
+            </h1>
+            <p class="text-slate-500 dark:text-slate-400 text-sm">
+              Access your dashboard, manage errands, and track earnings.
+            </p>
+          </div>
+
+          <!-- Form with only Google button (no email/password) -->
+          <form class="space-y-6">
+            <button
+              class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all shadow-sm"
+              type="button"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
+                ></path>
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                ></path>
+                <path
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  fill="#FBBC05"
+                ></path>
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  fill="#EA4335"
+                ></path>
+              </svg>
+              Continue with Google
+            </button>
+
+            <!-- subtle note: no password needed (mirrors signup helper text) -->
+            <p
+              class="text-center text-[11px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium pt-2"
+            >
+              We use Google for secure authentication
+            </p>
+          </form>
+
+          <!-- Incentive Note (parallel to signup's payments note) -->
+          <div
+            class="mt-8 p-4 bg-primary/5 dark:bg-primary/10 rounded-xl border border-primary/10 flex gap-3 items-start"
+          >
+            <span
+              class="material-symbols-outlined text-primary text-2xl flex-shrink-0"
+              >verified_user</span
+            >
+            <p
+              class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed"
+            >
+              <span class="font-bold text-primary">One-click access.</span> Use
+              your Google account, no extra passwords. Your dashboard and
+              earnings await.
+            </p>
+          </div>
+
+          <!-- Switch to Sign Up (mirrors signup's "Already an agent?" link) -->
+          <div
+            class="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 text-center"
+          >
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+              New to ErrandEase?
+              <a
+                class="text-primary font-bold hover:underline ml-1"
+                href="agent-signup.html"
+                >Become an agent</a
+              >
+            </p>
+          </div>
+        </div>
+
+        <!-- Footer Links (identical to signup) -->
+        <div
+          class="mt-8 flex justify-center gap-6 text-[12px] text-slate-400 font-medium"
+        >
+          <a class="hover:text-primary transition-colors" href="#"
+            >Agent Terms</a
+          >
+          <a class="hover:text-primary transition-colors" href="#"
+            >Commission</a
+          >
+          <a class="hover:text-primary transition-colors" href="#">Support</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="py-8 text-center">
+      <p class="text-xs text-slate-400">
+        © 2026 ErrandEase Marketplace. Secure agent payouts by Paystack.
+      </p>
+    </footer>
+  </body>
+</html>

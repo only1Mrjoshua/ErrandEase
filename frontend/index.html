@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>ErrandEase | Nigerian-based Errand Marketplace</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Primary favicon -->
+    <link rel="icon" type="image/x-icon" href="/frontend/images/favicon.ico" />
+
+    <!-- Modern SVG favicon -->
+    <link rel="icon" type="image/svg+xml" href="/frontend/images/favicon.svg" />
+
+    <!-- Apple Touch Icon (for iOS home screen) -->
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/frontend/images/apple-touch-icon.png"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#10b981",
+              secondary: "#1e293b",
+              "background-light": "#f8fafc",
+              "background-dark": "#0f172a",
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "1rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      button,
+      a {
+        -webkit-tap-highlight-color: rgba(16, 185, 129, 0.1);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased"
+  >
+    <!-- Header / Nav -->
+    <header
+      class="sticky top-0 z-50 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
+    >
+      <nav
+        class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between"
+      >
+        <div class="flex items-center gap-2 group cursor-pointer">
+          <a class="flex items-center gap-2 group cursor-pointer" href="/">
+            <div class="bg-primary p-1.5 rounded-lg text-white">
+              <span class="material-symbols-outlined text-2xl">local_mall</span>
+            </div>
+            <span
+              class="text-xl font-[800] tracking-tight text-secondary dark:text-white"
+              >ErrandEase</span
+            >
+          </a>
+        </div>
+        <div class="hidden md:flex items-center gap-8">
+          <a
+            class="text-sm font-semibold hover:text-primary transition-colors"
+            href="#how-it-works"
+            >How it Works</a
+          >
+          <a
+            class="text-sm font-semibold hover:text-primary transition-colors"
+            href="#services"
+            >Services</a
+          >
+          <a
+            class="text-sm font-semibold hover:text-primary transition-colors"
+            href="#safety"
+            >Safety</a
+          >
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            class="hidden sm:block text-sm font-bold text-secondary dark:text-slate-300 px-4 py-2"
+          >
+            Login
+          </button>
+          <a
+            href="Sign up.html"
+            class="bg-primary hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 inline-block"
+            >Request an Errand</a
+          >
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <!-- HERO SECTION - fully preserved content, only spacing/typography adjusted -->
+      <section
+        class="relative overflow-hidden pt-10 pb-16 sm:pt-14 sm:pb-20 lg:pt-20 lg:pb-32"
+      >
+        <div
+          class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-8 sm:gap-12 items-center"
+        >
+          <!-- text first on mobile -->
+          <div class="relative z-10">
+            <div
+              class="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold mb-4 sm:mb-6"
+            >
+              <span class="material-symbols-outlined text-sm">verified</span>
+              Trusted by 50,000+ Nigerians
+            </div>
+            <h1
+              class="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-800 text-secondary dark:text-white leading-tight sm:leading-[1.1] mb-4 sm:mb-6 tracking-tight"
+            >
+              Errands Done, <br /><span class="text-primary">Stress Gone.</span>
+            </h1>
+            <p
+              class="text-base sm:text-lg text-slate-600 dark:text-slate-400 mb-8 sm:mb-10 max-w-lg leading-relaxed"
+            >
+              Fast, reliable, and verified agents at your fingertips. Get your
+              market shopping, deliveries, and bank errands handled by trusted
+              professionals.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4">
+              <button
+                class="bg-primary hover:bg-emerald-600 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-2 min-h-[48px] w-full sm:w-auto"
+              >
+                Request an Errand
+                <span class="material-symbols-outlined">arrow_forward</span>
+              </button>
+              <button
+                class="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 hover:border-primary px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold text-base sm:text-lg text-secondary dark:text-white transition-all min-h-[48px] w-full sm:w-auto"
+              >
+                Become an Agent
+              </button>
+            </div>
+            <div class="mt-8 sm:mt-12 flex items-center gap-4">
+              <div class="flex -space-x-3">
+                <img
+                  class="w-10 h-10 rounded-full border-2 border-white"
+                  alt="Customer"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuq2ZqqmhjUljCx9HC4CVlehm4OUmbz3l6ukTj39PvAXufau7GVYBKXEfNZ7G_RZkv09_BQP0rx29mnyEZvUo67Di5AWZoQthSSm3fHuA2Rzx1RhKEaydiMGKx4Viqk2GWOsWGcDKAE5nkkmxufLS5CQhTyiSjc6-28IlCJwoZ9egI8S54Av1qG9hKPj88VmWXuesE_3uuP0vBAIi__-9VIoGM_aQoD-Iv_q42PWMh-JMPtjnWDg7mEl8Wy3VTS0U129yxhA7_Iow"
+                />
+                <img
+                  class="w-10 h-10 rounded-full border-2 border-white"
+                  alt="Customer"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8SF9p0-ZM7vE7bgFEXsV-glCut_XCVlUz7rCtUqhrGVle0abiand7f05R-IeqjnxTr2vpPwPIFIXV48hn-x2ceWp2BZKc8jJ_4b5uXvQ45AGD6b4YaJmvcVzoX-zZBDwBw22wO7CfeAIck3_XDAK2diyzZc_YQg4tyxrng-ePtFz54fNJZlTi5iDKzMpf3J2_nxQpBNMFIUj7elktyBkP9Xb_s3g65-rQ31JePqjqWeXxQM4WC7jnBHbYniX1STmIC4MJzfF5DAA"
+                />
+                <img
+                  class="w-10 h-10 rounded-full border-2 border-white"
+                  alt="Customer"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrevXPU4oXJUw4o6zym3bgEiIy4ppux4QP7YY2QdEUe71dFm5KxGTkW5FTS1NDUoCWdv3smIxiGVex6pVJRPo5dHcoskZMp0vh3j3wc_Uvi5HbSB2nDkMexL9iqxmJpcLez-TJyGka_yf8XXJN-fQrkQClDDA4KIaQNJE2niXjLONTkEASzi376U4eLXl5rY4pEY1R-z9RxjTQCt8gj9Se6qZQJ8lERpIhXTSodW5vUxIikXsBVik8mDA6awS1Q-ZqRWodEm7B888"
+                />
+              </div>
+              <p class="text-sm text-slate-500 font-medium">
+                4.9/5 stars from 2k+ reviews
+              </p>
+            </div>
+          </div>
+          <!-- phone mockup - reduced size on mobile, but fully present -->
+          <div class="relative flex justify-center">
+            <div
+              class="absolute -top-20 -right-20 w-56 h-56 sm:w-80 sm:h-80 bg-primary/20 rounded-full blur-3xl"
+            ></div>
+            <div
+              class="relative mx-auto w-full max-w-[280px] sm:max-w-[340px] md:max-w-[400px]"
+            >
+              <div
+                class="relative bg-slate-900 rounded-[3rem] p-3 border-[8px] border-slate-800 shadow-2xl"
+              >
+                <div
+                  class="bg-white rounded-[2.2rem] overflow-hidden aspect-[9/19] relative"
+                >
+                  <div
+                    class="absolute top-0 w-full h-full bg-slate-100"
+                    style="
+                      background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuAdnnNDIZFdFvYY1LmjMcM7K8o1IJyuHvPPQHqld6I8XXpDxzX5DyPHZtVKyrZKps7iMKyZl3VscGZkPJMnXh8HKxulXMkabDdd2M7UDUCqXluLCcO-tPQir2aRs5zhi_4Z-oDoNWzW_5adv_Y_D-oSmIYXHcNit6gEVdmg7GghBcRJlliw_V6IQ7KiGtgqcm6oiqVtqCrdW6GpacPHMJcpdZFJBeM5QLagFDIAdGsJIzoAfGdPffXvifcSNA7RWFzk7eV2oOcTRCc&quot;);
+                      background-size: cover;
+                    "
+                  ></div>
+                  <div
+                    class="absolute bottom-4 left-4 right-4 glass-card p-4 rounded-2xl shadow-lg border border-white/50"
+                  >
+                    <div class="flex items-center gap-3 mb-3">
+                      <div
+                        class="w-10 h-10 rounded-full bg-slate-200"
+                        style="
+                          background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuB4zbe-Z2xuNivmEQTKmT_4ROfbdYgQgxJkKl7gU9uWgYTx-J3tAwHj2U-yT32dU2v0SCAyliAK4wJGrzmTZ9z7iS3Qb-9bnnvd1mtTJRn3O7oZ0sqtsEM9d_cIuAZti1H9Pg_eLKIJHB5lGiDwVjKmeh6Ffd_rIKC02naZW0CZMMpXjVqmqYC27WRcLwBmRHkLqF7tcFcU8t_3cG_MdF8dXvZfZXECXn2AujlRBZh3p5Llnf1rjp5TplLdQdUWrjoB9e0q0aK3BsQ&quot;);
+                          background-size: cover;
+                        "
+                      ></div>
+                      <div>
+                        <p class="text-xs font-bold text-secondary">
+                          Agent Chinedu
+                        </p>
+                        <p class="text-[10px] text-slate-500">
+                          Delivering Groceries • 5 mins away
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden"
+                    >
+                      <div class="h-full bg-primary w-2/3"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROBLEMS SECTION - full content, spacing adjusted -->
+      <section
+        class="py-16 sm:py-20 lg:py-24 bg-white dark:bg-background-dark/50"
+      >
+        <div class="max-w-7xl mx-auto px-6">
+          <div class="text-center mb-10 sm:mb-14">
+            <h2
+              class="text-2xl sm:text-3xl lg:text-4xl font-800 text-secondary dark:text-white mb-4"
+            >
+              Life is busy. Let us help.
+            </h2>
+            <p class="text-slate-600 dark:text-slate-400">
+              Stop wasting time on things we can do for you.
+            </p>
+          </div>
+          <div class="grid md:grid-cols-3 gap-8">
+            <div
+              class="p-6 sm:p-8 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:shadow-xl transition-shadow group"
+            >
+              <div
+                class="w-14 h-14 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-primary shadow-sm mb-6 group-hover:scale-110 transition-transform"
+              >
+                <span class="material-symbols-outlined text-2xl sm:text-3xl"
+                  >traffic</span
+                >
+              </div>
+              <h3 class="text-xl font-bold text-secondary dark:text-white mb-3">
+                Stuck in Lagos Traffic?
+              </h3>
+              <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+                Skip the 3-hour gridlock. Our bike agents navigate the shortcuts
+                to get your items across town fast.
+              </p>
+            </div>
+            <div
+              class="p-6 sm:p-8 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:shadow-xl transition-shadow group"
+            >
+              <div
+                class="w-14 h-14 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-primary shadow-sm mb-6 group-hover:scale-110 transition-transform"
+              >
+                <span class="material-symbols-outlined text-2xl sm:text-3xl"
+                  >account_balance</span
+                >
+              </div>
+              <h3 class="text-xl font-bold text-secondary dark:text-white mb-3">
+                Long Bank Queues?
+              </h3>
+              <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+                Don't lose your morning in a banking hall. We handle physical
+                deposits, check submissions, and more.
+              </p>
+            </div>
+            <div
+              class="p-6 sm:p-8 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:shadow-xl transition-shadow group"
+            >
+              <div
+                class="w-14 h-14 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-primary shadow-sm mb-6 group-hover:scale-110 transition-transform"
+              >
+                <span class="material-symbols-outlined text-2xl sm:text-3xl"
+                  >shopping_cart</span
+                >
+              </div>
+              <h3 class="text-xl font-bold text-secondary dark:text-white mb-3">
+                No Time After Work?
+              </h3>
+              <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+                Rest after your shift. We'll pick up your groceries from Mile 12
+                or Balogun market and deliver to your door.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SERVICES GRID - full content -->
+      <section id="services" class="py-16 sm:py-20 lg:py-24">
+        <div class="max-w-7xl mx-auto px-6">
+          <div
+            class="flex flex-col md:flex-row md:items-end justify-between mb-10 sm:mb-14 gap-6"
+          >
+            <div class="max-w-xl">
+              <h2
+                class="text-2xl sm:text-3xl lg:text-4xl font-800 text-secondary dark:text-white mb-4"
+              >
+                Popular Services
+              </h2>
+              <p class="text-slate-600 dark:text-slate-400">
+                Whatever you need, our verified agents are ready to assist you
+                today.
+              </p>
+            </div>
+            <a
+              class="text-primary font-bold flex items-center gap-2 hover:gap-3 transition-all"
+              href="#"
+              >View all services
+              <span class="material-symbols-outlined">arrow_forward</span></a
+            >
+          </div>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div
+              class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:border-primary transition-colors cursor-pointer group"
+            >
+              <span
+                class="material-symbols-outlined text-primary mb-4 block text-3xl sm:text-4xl"
+                >local_mall</span
+              >
+              <h4 class="font-bold text-lg mb-2">Market Shopping</h4>
+              <p class="text-sm text-slate-500">
+                Groceries from any local market or supermarket.
+              </p>
+            </div>
+            <div
+              class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:border-primary transition-colors cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-primary mb-4 block text-3xl sm:text-4xl"
+                >description</span
+              >
+              <h4 class="font-bold text-lg mb-2">Document Delivery</h4>
+              <p class="text-sm text-slate-500">
+                Secure pick-up and drop-off for important files.
+              </p>
+            </div>
+            <div
+              class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:border-primary transition-colors cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-primary mb-4 block text-3xl sm:text-4xl"
+                >payments</span
+              >
+              <h4 class="font-bold text-lg mb-2">Bill Payments</h4>
+              <p class="text-sm text-slate-500">
+                NEPA bills, cable TV, and physical utility payments.
+              </p>
+            </div>
+            <div
+              class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:border-primary transition-colors cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-primary mb-4 block text-3xl sm:text-4xl"
+                >support_agent</span
+              >
+              <h4 class="font-bold text-lg mb-2">Personal Assistant</h4>
+              <p class="text-sm text-slate-500">
+                Tailored help for your unique daily tasks.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HOW IT WORKS - full tabs and content -->
+      <section
+        id="how-it-works"
+        class="py-16 sm:py-20 lg:py-24 bg-slate-50 dark:bg-slate-900/50"
+      >
+        <div class="max-w-4xl mx-auto px-6">
+          <div class="text-center mb-10 sm:mb-12">
+            <h2
+              class="text-2xl sm:text-3xl font-800 text-secondary dark:text-white mb-8"
+            >
+              How it Works
+            </h2>
+            <div
+              class="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl"
+            >
+              <button
+                class="px-8 py-2.5 rounded-lg bg-white dark:bg-slate-700 text-secondary dark:text-white font-bold shadow-sm"
+              >
+                For Customers
+              </button>
+              <button
+                class="px-8 py-2.5 rounded-lg text-slate-500 font-bold hover:text-secondary dark:hover:text-slate-300 transition-colors"
+              >
+                For Agents
+              </button>
+            </div>
+          </div>
+          <div class="space-y-8">
+            <!-- customer steps (default) - full text restored -->
+            <div class="flex gap-6 items-start">
+              <div
+                class="w-12 h-12 rounded-full bg-primary text-white flex-shrink-0 flex items-center justify-center font-bold text-xl"
+              >
+                1
+              </div>
+              <div>
+                <h3 class="text-xl font-bold mb-2">Post Your Task</h3>
+                <p class="text-slate-600 dark:text-slate-400">
+                  Describe what you need, set your location, and choose a
+                  delivery time. Our system calculates a fair price instantly.
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-6 items-start">
+              <div
+                class="w-12 h-12 rounded-full bg-primary text-white flex-shrink-0 flex items-center justify-center font-bold text-xl"
+              >
+                2
+              </div>
+              <div>
+                <h3 class="text-xl font-bold mb-2">Get Matched</h3>
+                <p class="text-slate-600 dark:text-slate-400">
+                  Our algorithm connects you with the nearest verified agent.
+                  Review their rating before they start the errand.
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-6 items-start">
+              <div
+                class="w-12 h-12 rounded-full bg-primary text-white flex-shrink-0 flex items-center justify-center font-bold text-xl"
+              >
+                3
+              </div>
+              <div>
+                <h3 class="text-xl font-bold mb-2">Track & Pay</h3>
+                <p class="text-slate-600 dark:text-slate-400">
+                  Watch your agent in real-time on the map. Payment is held in
+                  escrow and only released when you're satisfied.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRUST & SAFETY - full content, decorative element visible on larger screens only -->
+      <section
+        id="safety"
+        class="py-16 sm:py-20 lg:py-24 border-y border-slate-100 dark:border-slate-800"
+      >
+        <div class="max-w-7xl mx-auto px-6">
+          <div
+            class="bg-secondary text-white rounded-[2rem] p-8 sm:p-10 lg:p-20 relative overflow-hidden"
+          >
+            <!-- decorative skew hidden on small screens (<640px) to avoid crowding -->
+            <div
+              class="absolute top-0 right-0 w-1/2 h-full bg-primary/10 skew-x-12 translate-x-1/4 hidden sm:block"
+            ></div>
+            <div class="relative z-10 grid lg:grid-cols-2 gap-12 items-center">
+              <div>
+                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-800 mb-6">
+                  Your Security is Our
+                  <span class="text-primary">Top Priority</span>
+                </h2>
+                <p
+                  class="text-slate-300 text-base sm:text-lg mb-8 leading-relaxed"
+                >
+                  We've built Nigeria's most secure errand platform with
+                  multi-layered verification and payment protection.
+                </p>
+                <div class="grid grid-cols-2 gap-6">
+                  <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-primary"
+                      >verified_user</span
+                    ><span class="text-sm font-semibold"
+                      >ID Verified Agents</span
+                    >
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-primary"
+                      >lock</span
+                    ><span class="text-sm font-semibold"
+                      >Paystack Secure Payments</span
+                    >
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-primary"
+                      >distance</span
+                    ><span class="text-sm font-semibold"
+                      >Real-time GPS Tracking</span
+                    >
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-primary"
+                      >headset_mic</span
+                    ><span class="text-sm font-semibold"
+                      >24/7 In-app Support</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="hidden lg:flex justify-center">
+                <div
+                  class="w-64 h-64 border-4 border-primary/30 rounded-full flex items-center justify-center relative"
+                >
+                  <div
+                    class="w-48 h-48 bg-primary/20 rounded-full flex items-center justify-center"
+                  >
+                    <span
+                      class="material-symbols-outlined text-7xl text-primary"
+                      >shield</span
+                    >
+                  </div>
+                  <div
+                    class="absolute -top-4 -right-4 bg-white text-secondary p-3 rounded-xl shadow-lg font-bold text-xs"
+                  >
+                    100% Guaranteed
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AGENT RECRUITMENT - full content, image stacks above text on mobile -->
+      <section class="py-16 sm:py-20 lg:py-24">
+        <div
+          class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-10 sm:gap-14 items-center"
+        >
+          <!-- image first on mobile (order-1), then text (order-2) -->
+          <div
+            class="rounded-[2rem] overflow-hidden aspect-video lg:aspect-square bg-slate-200 order-1 lg:order-none"
+            style="
+              background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuDGw5sARwTCImXkUBU4HGW-d2ncUNQ6XZQrq6Q81yO1x8dInufHny9IyM3EkxQZjsL01AmgazFXkRxEv7I5yRbtqkb1rPuSL9isXZY-Lq7QIP43v0kB1YvSPiVhIyXRhEVtpjwsUsDRMpPwnNyOQ_wBppTVVntJG22UJiUni28lcwGjsK9IRZzjqYOfwUaeJ1xrh3WB2zHKiVtnuWHMv3HYp1IxB3ZcLN-kdwD2TQVpjYfdSFx7oO3tC2S85MEfkDEw_rdfk-lmDV8&quot;);
+              background-size: cover;
+              background-position: center;
+            "
+          ></div>
+          <div class="order-2 lg:order-none">
+            <h2
+              class="text-2xl sm:text-3xl lg:text-4xl font-800 text-secondary dark:text-white mb-6"
+            >
+              Turn Your Spare Time into Cash
+            </h2>
+            <p
+              class="text-base sm:text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed"
+            >
+              Have a bike, bicycle, or just some free time? Join thousands of
+              ErrandEase agents across Nigeria and start earning on your own
+              schedule.
+            </p>
+            <ul class="space-y-4 mb-10">
+              <li
+                class="flex items-center gap-3 font-semibold text-secondary dark:text-slate-200"
+              >
+                <span class="material-symbols-outlined text-primary"
+                  >check_circle</span
+                >
+                Weekly payouts directly to your bank
+              </li>
+              <li
+                class="flex items-center gap-3 font-semibold text-secondary dark:text-slate-200"
+              >
+                <span class="material-symbols-outlined text-primary"
+                  >check_circle</span
+                >
+                Be your own boss — work whenever
+              </li>
+              <li
+                class="flex items-center gap-3 font-semibold text-secondary dark:text-slate-200"
+              >
+                <span class="material-symbols-outlined text-primary"
+                  >check_circle</span
+                >
+                Bonus incentives for top performers
+              </li>
+            </ul>
+            <button
+              class="bg-secondary dark:bg-slate-700 text-white px-8 py-4 rounded-xl font-bold text-base sm:text-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition-all shadow-xl w-full sm:w-auto min-h-[48px]"
+            >
+              Apply to be an Agent
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TESTIMONIALS - full content restored -->
+      <section class="py-16 sm:py-20 lg:py-24 bg-slate-50 dark:bg-slate-900/50">
+        <div class="max-w-7xl mx-auto px-6">
+          <h2 class="text-2xl sm:text-3xl font-800 text-center mb-10 sm:mb-16">
+            What our users say
+          </h2>
+          <div class="grid md:grid-cols-3 gap-8">
+            <div
+              class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700"
+            >
+              <div class="flex text-amber-400 mb-4">
+                <span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span>
+              </div>
+              <p class="text-slate-600 dark:text-slate-400 italic mb-6">
+                "Life-saver for my business deliveries! I used to spend 4 hours
+                in traffic daily just to get products to customers. Now I just
+                ErrandEase it."
+              </p>
+              <div class="flex items-center gap-4">
+                <img
+                  class="w-12 h-12 rounded-full"
+                  alt="avatar"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPM3z84yhu591ATGyBv1jdzk_WAqcRGha5f1BhlDk7MSwFox9-BQpiuHFGcG4GRnSn4DFBhx-m7qj8pfJg8rthCdwsMB-Tt6NdYoJtEXe60C3_WYQSOzsa4AfiNYi71LC6Ra33X7sR0lJeYH2PCWp-JpG-uQxXvoBgWf4j2pPg0uF_YPCbjCVS_KJkQhqJP4fEAnIRHznhovN3WH1VHpa9ntx9oMO5z4ssa44dfGPZS2-KSClGNExo2jtOo-CP0ewR75dNzyRF41Y"
+                />
+                <div>
+                  <p class="font-bold text-secondary dark:text-white">
+                    Tunde Adebayo
+                  </p>
+                  <p class="text-xs text-slate-500">Business Owner, Ikeja</p>
+                </div>
+              </div>
+            </div>
+            <div
+              class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700"
+            >
+              <div class="flex text-amber-400 mb-4">
+                <span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span>
+              </div>
+              <p class="text-slate-600 dark:text-slate-400 italic mb-6">
+                "As a busy nursing mother, getting groceries from the market was
+                a nightmare. The agents are so polite and verify every item with
+                photos."
+              </p>
+              <div class="flex items-center gap-4">
+                <img
+                  class="w-12 h-12 rounded-full"
+                  alt="avatar"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYSV24_gJMsk9SVwvG8gsNnxVJlLoyfbuE3VFKAN62S-AnWtN2qifOjU42isavCGf_v9SsA-U2xnm8Az5joKgPpzkdOb0K-bXvToAlMGnullm8qVuUrtGFe7TRHd1T8RbhgorFVjugrIk7aThRpAZ8TbR6Du_4Ab6P1PU7q3FplpqHiYkJAQeKuZJqb0xzx8Zi0SeTbUWQ-fUgvQrX1f9Ar21BCnb6RUn0CRx3Ahx0pSu6lAn1rPX9u9dx6kYKyOJ4awOdVCrcl3Q"
+                />
+                <div>
+                  <p class="font-bold text-secondary dark:text-white">
+                    Chinyere Obi
+                  </p>
+                  <p class="text-xs text-slate-500">Mother of two, Lekki</p>
+                </div>
+              </div>
+            </div>
+            <div
+              class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700"
+            >
+              <div class="flex text-amber-400 mb-4">
+                <span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span
+                ><span class="material-symbols-outlined">star</span>
+              </div>
+              <p class="text-slate-600 dark:text-slate-400 italic mb-6">
+                "I became an agent when I was between jobs. Now I make enough to
+                support my family just by running bank errands in my
+                neighborhood."
+              </p>
+              <div class="flex items-center gap-4">
+                <img
+                  class="w-12 h-12 rounded-full"
+                  alt="avatar"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKIDX5z3KJUcSUDLGj0NUyxxWJLdM5s98QJszQHjq5TuxzKqqDFG5-_lcPEEaFyQ3NCqLRjNULnZjtzkoEkfiMP9NZ-S__Xbv-c6XOrPtMUrumd6qjuDQQ1g3dxzpDDCHwZhrVkDp1bxMNTTkZWWXiMeJ0KR1rNe5nlBpcwIj63u2ns4XfxNYMURHcrpjXY1phcDGCnfRJs7hs610MZc0txX2YAwWsq7ojVTGHU0MdMaWPISsB4KSFomrYyRxDPBwa1G9Fupav1TU"
+                />
+                <div>
+                  <p class="font-bold text-secondary dark:text-white">
+                    Emeka Okafor
+                  </p>
+                  <p class="text-xs text-slate-500">Top Rated Agent, Abuja</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FINAL CTA - full content, buttons stack on mobile -->
+      <section class="py-16 sm:py-20 lg:py-24">
+        <div class="max-w-7xl mx-auto px-6">
+          <div
+            class="bg-primary rounded-[2.5rem] p-8 sm:p-12 lg:p-24 text-center text-white relative overflow-hidden shadow-2xl shadow-primary/40"
+          >
+            <div
+              class="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent"
+            ></div>
+            <div class="relative z-10 max-w-2xl mx-auto">
+              <h2
+                class="text-3xl sm:text-4xl lg:text-6xl font-800 mb-6 tracking-tight"
+              >
+                Ready to reclaim your time?
+              </h2>
+              <p class="text-base sm:text-lg text-emerald-50 mb-8">
+                Join thousands of Nigerians using ErrandEase to simplify their
+                lives. Download the app today.
+              </p>
+              <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button
+                  class="bg-secondary hover:bg-slate-800 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-transform hover:scale-105 w-full sm:w-auto min-h-[48px]"
+                >
+                  <span class="material-symbols-outlined">ios</span>
+                  <div class="text-left">
+                    <p class="text-[10px] uppercase opacity-70 leading-none">
+                      Download on the
+                    </p>
+                    <p class="text-base sm:text-lg leading-none">App Store</p>
+                  </div>
+                </button>
+                <button
+                  class="bg-secondary hover:bg-slate-800 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-transform hover:scale-105 w-full sm:w-auto min-h-[48px]"
+                >
+                  <span class="material-symbols-outlined">play_apps</span>
+                  <div class="text-left">
+                    <p class="text-[10px] uppercase opacity-70 leading-none">
+                      Get it on
+                    </p>
+                    <p class="text-base sm:text-lg leading-none">Google Play</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER - full original content -->
+    <footer
+      class="bg-white dark:bg-background-dark border-t border-slate-100 dark:border-slate-800 py-16"
+    >
+      <div class="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-12">
+        <div class="col-span-2 md:col-span-1">
+          <div class="flex items-center gap-2 mb-6">
+            <div class="bg-primary p-1 rounded-lg text-white">
+              <span class="material-symbols-outlined text-xl">local_mall</span>
+            </div>
+            <span class="text-xl font-800 text-secondary dark:text-white"
+              >ErrandEase</span
+            >
+          </div>
+          <p class="text-slate-500 text-sm leading-relaxed mb-6">
+            Nigeria's leading marketplace for trusted errand services.
+            Empowering communities one task at a time.
+          </p>
+          <div class="flex gap-4">
+            <a
+              class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-secondary dark:text-white hover:bg-primary hover:text-white transition-colors"
+              href="#"
+              ><span class="material-symbols-outlined">share</span></a
+            >
+            <a
+              class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-secondary dark:text-white hover:bg-primary hover:text-white transition-colors"
+              href="#"
+              ><span class="material-symbols-outlined">public</span></a
+            >
+          </div>
+        </div>
+        <div>
+          <h4 class="font-bold text-secondary dark:text-white mb-6">Company</h4>
+          <ul class="space-y-4 text-sm text-slate-500">
+            <li><a class="hover:text-primary" href="#">About Us</a></li>
+            <li><a class="hover:text-primary" href="#">Careers</a></li>
+            <li><a class="hover:text-primary" href="#">Press</a></li>
+            <li><a class="hover:text-primary" href="#">Contact</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-bold text-secondary dark:text-white mb-6">Support</h4>
+          <ul class="space-y-4 text-sm text-slate-500">
+            <li><a class="hover:text-primary" href="#">Help Center</a></li>
+            <li>
+              <a class="hover:text-primary" href="#">Safety Guidelines</a>
+            </li>
+            <li><a class="hover:text-primary" href="#">Terms of Service</a></li>
+            <li><a class="hover:text-primary" href="#">Privacy Policy</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-bold text-secondary dark:text-white mb-6">
+            Newsletter
+          </h4>
+          <p class="text-sm text-slate-500 mb-4">
+            Get time-saving tips and promos.
+          </p>
+          <div class="flex gap-2">
+            <input
+              class="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm w-full focus:ring-primary"
+              placeholder="Email address"
+              type="email"
+            />
+            <button class="bg-primary p-2 rounded-lg text-white">
+              <span class="material-symbols-outlined">send</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div
+        class="max-w-7xl mx-auto px-6 mt-16 pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4"
+      >
+        <p class="text-xs text-slate-400">
+          © 2026 ErrandEase Marketplace. All rights reserved.
+        </p>
+        <div class="flex gap-8">
+          <img
+            class="h-6 grayscale opacity-50"
+            alt="Paystack"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_xytngGhrz5FwckMZ2wehTZMjeDkV5yEDkljfTH3ayPuyAZYDsufPeAIsW8kRNIpaZHaka-VS3jq9ifSZn2ZAdPQPWZ6rDVVcdPsYd8A4UScJUwzqAeUed8UZt0CE1Je9OkKC9-7KXtiNE_aAIyz_5o_ITAeG8C9ADf8LgUt5Z-oGEF05qC6xypee0mVqO9OOA4VGxN2u6BJ91lOAbmrD1FMSO-L3ZPxGMl_PX2EZ1e5kBYUOA6IKeLeybkp80cVwQOFYlV4Vsmw"
+          />
+        </div>
+      </div>
+    </footer>
+
+    <!-- Tab switching script (unchanged) -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const customerTab = document.querySelector(
+          "#how-it-works .inline-flex button:first-child",
+        );
+        const agentTab = document.querySelector(
+          "#how-it-works .inline-flex button:last-child",
+        );
+        const stepsContainer = document.querySelector(
+          "#how-it-works .space-y-8",
+        );
+        const customerSteps = stepsContainer.innerHTML;
+        const agentSteps = `
+      <div class="flex gap-6 items-start">
+        <div class="w-12 h-12 rounded-full bg-primary text-white flex-shrink-0 flex items-center justify-center font-bold text-xl">1</div>
+        <div>
+          <h3 class="text-xl font-bold mb-2">Sign Up & Verify</h3>
+          <p class="text-slate-600 dark:text-slate-400">Create your agent profile and complete our quick verification process. We'll run a background check to ensure trust and safety.</p>
+        </div>
+      </div>
+      <div class="flex gap-6 items-start">
+        <div class="w-12 h-12 rounded-full bg-primary text-white flex-shrink-0 flex items-center justify-center font-bold text-xl">2</div>
+        <div>
+          <h3 class="text-xl font-bold mb-2">Accept Tasks Nearby</h3>
+          <p class="text-slate-600 dark:text-slate-400">Browse available errands in your area. Choose tasks that fit your schedule and accept the ones you want.</p>
+        </div>
+      </div>
+      <div class="flex gap-6 items-start">
+        <div class="w-12 h-12 rounded-full bg-primary text-white flex-shrink-0 flex items-center justify-center font-bold text-xl">3</div>
+        <div>
+          <h3 class="text-xl font-bold mb-2">Earn & Get Paid</h3>
+          <p class="text-slate-600 dark:text-slate-400">Complete tasks efficiently, receive ratings, and get paid weekly directly to your bank account. Top performers earn bonuses!</p>
+        </div>
+      </div>
+    `;
+        customerTab.addEventListener("click", function () {
+          customerTab.classList.add(
+            "bg-white",
+            "dark:bg-slate-700",
+            "text-secondary",
+            "dark:text-white",
+            "font-bold",
+            "shadow-sm",
+          );
+          agentTab.classList.remove(
+            "bg-white",
+            "dark:bg-slate-700",
+            "text-secondary",
+            "dark:text-white",
+            "font-bold",
+            "shadow-sm",
+          );
+          agentTab.classList.add(
+            "text-slate-500",
+            "font-bold",
+            "hover:text-secondary",
+            "dark:hover:text-slate-300",
+          );
+          stepsContainer.innerHTML = customerSteps;
+        });
+        agentTab.addEventListener("click", function () {
+          agentTab.classList.add(
+            "bg-white",
+            "dark:bg-slate-700",
+            "text-secondary",
+            "dark:text-white",
+            "font-bold",
+            "shadow-sm",
+          );
+          customerTab.classList.remove(
+            "bg-white",
+            "dark:bg-slate-700",
+            "text-secondary",
+            "dark:text-white",
+            "font-bold",
+            "shadow-sm",
+          );
+          customerTab.classList.add(
+            "text-slate-500",
+            "font-bold",
+            "hover:text-secondary",
+            "dark:hover:text-slate-300",
+          );
+          stepsContainer.innerHTML = agentSteps;
+        });
+      });
+    </script>
+  </body>
+</html>
