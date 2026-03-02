@@ -76,47 +76,60 @@ async def google_login(request: Request, redirect_to: Optional[str] = None):
 async def google_callback(request: Request):
     print(f"🔍 Using redirect URI: {settings.GOOGLE_REDIRECT_URI}")
     print(f"🌍 Environment: {settings.ENVIRONMENT}")
+    print(f"📝 Full callback URL: {request.url}")
+    print(f"📝 Query params: {dict(request.query_params)}")
     """Handle Google OAuth callback"""
     try:
         # Verify state parameter for CSRF protection
         expected_state = request.session.get('oauth_state')
         received_state = request.query_params.get('state')
         
-        print(f"Expected state: {expected_state}")
-        print(f"Received state: {received_state}")
+        print(f"🔐 Expected state: {expected_state}")
+        print(f"🔐 Received state: {received_state}")
+        print(f"📋 Session contents: {dict(request.session)}")
         
-        # In production, be more lenient with state validation
-        if settings.ENVIRONMENT == "production":
-            if not expected_state or not received_state:
-                print("⚠️ Warning: Missing state parameter - continuing anyway")
-            elif expected_state != received_state:
-                print(f"⚠️ State mismatch: expected={expected_state}, received={received_state}")
-                print("⚠️ Continuing with authentication despite state mismatch")
-            
-            # FIX: Don't pass state explicitly - let Authlib extract it from the request
-            # The state is already in the request.query_params, which Authlib can access
-            token = await oauth.google.authorize_access_token(request)
-            
-        else:
-            # In development, strictly validate
-            if not expected_state or expected_state != received_state:
-                raise HTTPException(status_code=400, detail="Invalid state parameter")
-            
-            # Get token from Google
-            token = await oauth.google.authorize_access_token(request)
+        # ALWAYS validate state parameter for security
+        if not expected_state or not received_state:
+            print("❌ Missing state parameter")
+            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Missing+state+parameter"
+            return RedirectResponse(url=error_url)
+        
+        if expected_state != received_state:
+            print(f"❌ State mismatch: expected={expected_state}, received={received_state}")
+            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Invalid+state+parameter"
+            return RedirectResponse(url=error_url)
+        
+        # Clear state from session immediately to prevent reuse
+        request.session.pop('oauth_state', None)
+        
+        # Get token from Google
+        print("🔄 Attempting to get access token from Google...")
+        token = await oauth.google.authorize_access_token(request)
+        print(f"✅ Successfully got token: {token.keys()}")
         
         # Get user info from Google's userinfo endpoint
+        print("🔄 Getting user info from Google...")
         resp = await oauth.google.get('https://www.googleapis.com/oauth2/v3/userinfo', token=token)
+        
         if resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to get user info")
+            print(f"❌ Failed to get user info. Status: {resp.status_code}")
+            print(f"Response: {await resp.text()}")
+            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Failed+to+get+user+info"
+            return RedirectResponse(url=error_url)
         
         user_info = resp.json()
+        print(f"✅ Got user info: {user_info.get('email')}")
         
         # Extract user data
         google_id = user_info.get('sub')
         email = user_info.get('email')
         name = user_info.get('name')
         picture = user_info.get('picture')
+        
+        if not email:
+            print("❌ No email in user info")
+            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=No+email+from+Google"
+            return RedirectResponse(url=error_url)
         
         print(f"✅ User authenticated: {email}")
         
@@ -135,6 +148,7 @@ async def google_callback(request: Request):
             )
             user_id = str(existing_user['_id'])
             is_new_user = False
+            print(f"🔄 Existing user: {email}")
         else:
             # Create new user
             new_user = {
@@ -148,6 +162,7 @@ async def google_callback(request: Request):
             result = users_collection.insert_one(new_user)
             user_id = str(result.inserted_id)
             is_new_user = True
+            print(f"🆕 New user created: {email}")
         
         # Create JWT token
         access_token = create_access_token(
@@ -157,6 +172,7 @@ async def google_callback(request: Request):
                 "name": name
             }
         )
+        print(f"🔑 JWT token created")
         
         # Determine redirect based on user type
         if is_new_user:
@@ -164,17 +180,22 @@ async def google_callback(request: Request):
         else:
             redirect_url = f"{settings.FRONTEND_URL}/sign-in.html?token={access_token}"
         
-        # Clear session
-        if 'oauth_state' in request.session:
-            request.session.pop('oauth_state')
-        
         print(f"✅ Authentication successful")
         print(f"➡️ Redirecting to: {redirect_url}")
         
-        return RedirectResponse(url=redirect_url)
+        # Set a cookie with the token for additional compatibility
+        response = RedirectResponse(url=redirect_url)
+        response.set_cookie(
+            key="auth_token",
+            value=access_token,
+            httponly=True,
+            max_age=3600,
+            secure=settings.ENVIRONMENT == "production",
+            samesite="lax"
+        )
         
-    except HTTPException as he:
-        raise he
+        return response
+        
     except Exception as e:
         print(f"❌ OAuth callback error: {str(e)}")
         import traceback
