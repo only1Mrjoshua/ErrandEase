@@ -6,28 +6,45 @@ load_dotenv()
 
 class Settings:
     def __init__(self):
+        # Environment (add this line)
+        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+        
         # MongoDB Atlas
         self.MONGODB_URL = os.getenv("MONGODB_URL", "")
         self.MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "errandease")
         
-        # Google OAuth
+        # Google OAuth - Use environment-specific logic
         self.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
         self.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-        self.GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
+        
+        # Set redirect URI based on environment
+        if self.ENVIRONMENT == "production":
+            self.GOOGLE_REDIRECT_URI = os.getenv(
+                "GOOGLE_REDIRECT_URI", 
+                "https://errandeasebackend.onrender.com/api/auth/google/callback"
+            )
+            self.FRONTEND_URL = os.getenv("FRONTEND_URL", "https://your-frontend-domain.com")
+        else:
+            self.GOOGLE_REDIRECT_URI = os.getenv(
+                "GOOGLE_REDIRECT_URI", 
+                "http://localhost:8000/api/auth/google/callback"
+            )
+            self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5500")
         
         # JWT
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
         
-        # Frontend
-        self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5500")
-        
         # Validate critical settings
         self.validate()
 
     def validate(self):
         """Validate that critical settings are configured"""
+        print(f"🌍 Environment: {self.ENVIRONMENT}")
+        print(f"📡 Google Redirect URI: {self.GOOGLE_REDIRECT_URI}")
+        print(f"🎨 Frontend URL: {self.FRONTEND_URL}")
+        
         if not self.MONGODB_URL:
             print("⚠️  Warning: MONGODB_URL is not set in .env file")
         if not self.GOOGLE_CLIENT_ID:

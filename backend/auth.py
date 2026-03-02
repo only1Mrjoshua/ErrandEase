@@ -83,10 +83,18 @@ async def google_callback(request: Request):
         print(f"Expected state: {expected_state}")
         print(f"Received state: {received_state}")
         
-        if not expected_state or expected_state != received_state:
-            print("State validation failed")
-            # Don't raise exception yet, try to proceed in production
-            if settings.ENVIRONMENT != "production":
+        # In production, be more lenient with state validation
+        # Sometimes session doesn't persist correctly across domains
+        if settings.ENVIRONMENT == "production":
+            if not expected_state or not received_state:
+                print("⚠️ Warning: Missing state parameter - continuing anyway")
+            elif expected_state != received_state:
+                print(f"⚠️ State mismatch: expected={expected_state}, received={received_state}")
+                print("⚠️ Continuing with authentication despite state mismatch")
+            # Don't raise exception - continue with authentication
+        else:
+            # In development, strictly validate
+            if not expected_state or expected_state != received_state:
                 raise HTTPException(status_code=400, detail="Invalid state parameter")
         
         # Get token from Google
@@ -105,7 +113,7 @@ async def google_callback(request: Request):
         name = user_info.get('name')
         picture = user_info.get('picture')
         
-        print(f"User authenticated: {email}")
+        print(f"✅ User authenticated: {email}")
         
         # Check if user exists in database
         existing_user = users_collection.find_one({"email": email})
@@ -149,15 +157,13 @@ async def google_callback(request: Request):
         if is_new_user:
             redirect_url = f"{settings.FRONTEND_URL}/sign-up.html?token={access_token}"
         else:
-            redirect_url = f"{settings.FRONTEND_URL}/signin.html?token={access_token}"
+            redirect_url = f"{settings.FRONTEND_URL}/sign-in.html?token={access_token}"
         
         # Clear session
         if 'oauth_state' in request.session:
             request.session.pop('oauth_state')
-        if 'requested_page' in request.session:
-            request.session.pop('requested_page')
         
-        print(f"✅ Authentication successful for {email}")
+        print(f"✅ Authentication successful")
         print(f"➡️ Redirecting to: {redirect_url}")
         
         return RedirectResponse(url=redirect_url)
