@@ -20,12 +20,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session middleware (required for OAuth state)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.JWT_SECRET_KEY,
     session_cookie="errandease_session",
-    max_age=3600  # 1 hour
+    max_age=3600,
+    same_site="lax",
+    https_only=settings.ENVIRONMENT == "production"
 )
 
 # Include routers

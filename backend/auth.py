@@ -8,6 +8,7 @@ from jose import jwt
 import secrets
 from typing import Optional
 from pydantic import BaseModel
+from urllib.parse import quote
 
 from config import settings
 from database import users_collection
@@ -53,32 +54,50 @@ class UserResponse(BaseModel):
     name: str
     picture: Optional[str] = None
 
-# Routes - SINGLE login route
+# Routes - FIXED VERSION
 @router.get("/google/login")
 async def google_login(request: Request, redirect_to: Optional[str] = None):
     """Redirect to Google OAuth consent screen with optional redirect"""
-    # Store the page user wanted to go to
-    if redirect_to:
-        request.session['requested_page'] = redirect_to
-    
-    # Generate and store state parameter for CSRF protection
-    state = secrets.token_urlsafe(32)
-    request.session['oauth_state'] = state
-    
-    # Pass redirect_uri here, NOT in client_kwargs
-    return await oauth.google.authorize_redirect(
-        request, 
-        settings.GOOGLE_REDIRECT_URI, 
-        state=state
-    )
+    try:
+        print(f"🚀 Starting Google login. Environment: {settings.ENVIRONMENT}")
+        print(f"📡 Redirect URI: {settings.GOOGLE_REDIRECT_URI}")
+        print(f"🎨 Frontend URL: {settings.FRONTEND_URL}")
+        
+        # Store the page user wanted to go to
+        if redirect_to:
+            request.session['requested_page'] = redirect_to
+        
+        # Generate and store state parameter for CSRF protection
+        state = secrets.token_urlsafe(32)
+        request.session['oauth_state'] = state
+        print(f"🔐 Generated state: {state}")
+        
+        # IMPORTANT: Pass the redirect_uri as a parameter, not in client_kwargs
+        # This ensures Google redirects back to your backend callback
+        redirect_response = await oauth.google.authorize_redirect(
+            request, 
+            redirect_uri=settings.GOOGLE_REDIRECT_URI,  # Make sure this parameter is named correctly
+            state=state
+        )
+        
+        print(f"➡️ Redirecting to Google: {redirect_response.headers.get('location')}")
+        return redirect_response
+        
+    except Exception as e:
+        print(f"❌ Google login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Redirect to frontend with error
+        error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Login+initiation+failed"
+        return RedirectResponse(url=error_url)
 
 @router.get("/google/callback")
 async def google_callback(request: Request):
-    print(f"🔍 Using redirect URI: {settings.GOOGLE_REDIRECT_URI}")
+    print(f"🔍 Callback received")
     print(f"🌍 Environment: {settings.ENVIRONMENT}")
     print(f"📝 Full callback URL: {request.url}")
     print(f"📝 Query params: {dict(request.query_params)}")
-    """Handle Google OAuth callback"""
+    
     try:
         # Verify state parameter for CSRF protection
         expected_state = request.session.get('oauth_state')
@@ -86,39 +105,37 @@ async def google_callback(request: Request):
         
         print(f"🔐 Expected state: {expected_state}")
         print(f"🔐 Received state: {received_state}")
-        print(f"📋 Session contents: {dict(request.session)}")
         
-        # ALWAYS validate state parameter for security
+        # Validate state parameter
         if not expected_state or not received_state:
             print("❌ Missing state parameter")
             error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Missing+state+parameter"
             return RedirectResponse(url=error_url)
         
         if expected_state != received_state:
-            print(f"❌ State mismatch: expected={expected_state}, received={received_state}")
+            print(f"❌ State mismatch")
             error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Invalid+state+parameter"
             return RedirectResponse(url=error_url)
         
-        # Clear state from session immediately to prevent reuse
+        # Clear state from session
         request.session.pop('oauth_state', None)
         
         # Get token from Google
-        print("🔄 Attempting to get access token from Google...")
+        print("🔄 Getting access token from Google...")
         token = await oauth.google.authorize_access_token(request)
-        print(f"✅ Successfully got token: {token.keys()}")
+        print(f"✅ Got token: {list(token.keys()) if token else 'None'}")
         
-        # Get user info from Google's userinfo endpoint
+        # Get user info
         print("🔄 Getting user info from Google...")
-        resp = await oauth.google.get('https://www.googleapis.com/oauth2/v3/userinfo', token=token)
+        userinfo_response = await oauth.google.get('userinfo', token=token)
         
-        if resp.status_code != 200:
-            print(f"❌ Failed to get user info. Status: {resp.status_code}")
-            print(f"Response: {await resp.text()}")
+        if userinfo_response.status_code != 200:
+            print(f"❌ Failed to get user info: {userinfo_response.status_code}")
             error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Failed+to+get+user+info"
             return RedirectResponse(url=error_url)
         
-        user_info = resp.json()
-        print(f"✅ Got user info: {user_info.get('email')}")
+        user_info = userinfo_response.json()
+        print(f"✅ Got user info for: {user_info.get('email')}")
         
         # Extract user data
         google_id = user_info.get('sub')
@@ -130,8 +147,6 @@ async def google_callback(request: Request):
             print("❌ No email in user info")
             error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=No+email+from+Google"
             return RedirectResponse(url=error_url)
-        
-        print(f"✅ User authenticated: {email}")
         
         # Check if user exists in database
         existing_user = users_collection.find_one({"email": email})
@@ -172,7 +187,6 @@ async def google_callback(request: Request):
                 "name": name
             }
         )
-        print(f"🔑 JWT token created")
         
         # Determine redirect based on user type
         if is_new_user:
@@ -183,8 +197,10 @@ async def google_callback(request: Request):
         print(f"✅ Authentication successful")
         print(f"➡️ Redirecting to: {redirect_url}")
         
-        # Set a cookie with the token for additional compatibility
+        # Create response with redirect
         response = RedirectResponse(url=redirect_url)
+        
+        # Also set a cookie for good measure
         response.set_cookie(
             key="auth_token",
             value=access_token,
