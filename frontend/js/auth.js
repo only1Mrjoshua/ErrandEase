@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
 
         // Redirect if already authenticated
-        redirectIfAuthenticated: function(redirectTo = 'dashboard.html') {
+        redirectIfAuthenticated: function(redirectTo = 'customer-dashboard.html') {
             if (this.isAuthenticated()) {
                 window.location.href = redirectTo;
                 return true;
