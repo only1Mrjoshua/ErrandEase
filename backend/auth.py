@@ -93,18 +93,16 @@ async def google_callback(request: Request):
                 print(f"⚠️ State mismatch: expected={expected_state}, received={received_state}")
                 print("⚠️ Continuing with authentication despite state mismatch")
             
-            # IMPORTANT FIX: Pass the received state to authorize_access_token
-            # This bypasses Authlib's internal state validation
-            token = await oauth.google.authorize_access_token(
-                request,
-                state=received_state  # Explicitly pass the state from query params
-            )
+            # FIX: Don't pass state explicitly - let Authlib extract it from the request
+            # The state is already in the request.query_params, which Authlib can access
+            token = await oauth.google.authorize_access_token(request)
+            
         else:
             # In development, strictly validate
             if not expected_state or expected_state != received_state:
                 raise HTTPException(status_code=400, detail="Invalid state parameter")
             
-            # Get token from Google with default validation
+            # Get token from Google
             token = await oauth.google.authorize_access_token(request)
         
         # Get user info from Google's userinfo endpoint
