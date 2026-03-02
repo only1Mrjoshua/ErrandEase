@@ -20,13 +20,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# main.py - add this before including routers
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.JWT_SECRET_KEY,
     session_cookie="errandease_session",
     max_age=3600,
     same_site="lax",
-    https_only=settings.ENVIRONMENT == "production"
+    https_only=False,  # Set to True only in production with HTTPS
+    domain=None  # Let it handle domain automatically
 )
 
 # Include routers
