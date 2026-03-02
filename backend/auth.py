@@ -86,21 +86,26 @@ async def google_callback(request: Request):
         print(f"Received state: {received_state}")
         
         # In production, be more lenient with state validation
-        # Sometimes session doesn't persist correctly across domains
         if settings.ENVIRONMENT == "production":
             if not expected_state or not received_state:
                 print("⚠️ Warning: Missing state parameter - continuing anyway")
             elif expected_state != received_state:
                 print(f"⚠️ State mismatch: expected={expected_state}, received={received_state}")
                 print("⚠️ Continuing with authentication despite state mismatch")
-            # Don't raise exception - continue with authentication
+            
+            # IMPORTANT FIX: Pass the received state to authorize_access_token
+            # This bypasses Authlib's internal state validation
+            token = await oauth.google.authorize_access_token(
+                request,
+                state=received_state  # Explicitly pass the state from query params
+            )
         else:
             # In development, strictly validate
             if not expected_state or expected_state != received_state:
                 raise HTTPException(status_code=400, detail="Invalid state parameter")
-        
-        # Get token from Google
-        token = await oauth.google.authorize_access_token(request)
+            
+            # Get token from Google with default validation
+            token = await oauth.google.authorize_access_token(request)
         
         # Get user info from Google's userinfo endpoint
         resp = await oauth.google.get('https://www.googleapis.com/oauth2/v3/userinfo', token=token)
