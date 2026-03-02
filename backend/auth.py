@@ -125,17 +125,30 @@ async def get_google_user_info(access_token: str):
 @router.get("/google/url")
 async def get_google_auth_url(request: Request, action: Optional[str] = None):
     """Get Google OAuth URL for frontend"""
+    print(f"🔗 Generating Google auth URL for action: {action}")
+    print(f"🎯 Frontend URL from settings: {settings.FRONTEND_URL}")
+    print(f"🌍 Environment: {settings.ENVIRONMENT}")
     
     # Generate state
     state = secrets.token_urlsafe(32)
     
-    # Determine redirect URI
-    if action == 'signup':
-        redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
+    # Determine redirect URI based on environment
+    if settings.ENVIRONMENT == "production":
+        # Production: no /frontend/ folder
+        if action == 'signup':
+            redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
+        else:
+            redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
     else:
-        redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
+        # Development: with /frontend/ folder
+        if action == 'signup':
+            redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
+        else:
+            redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
     
-    # Store BOTH state and redirect_uri in session
+    print(f"🔄 Using redirect URI: {redirect_uri}")
+    
+    # Store in session
     request.session['oauth_state'] = state
     request.session['oauth_redirect_uri'] = redirect_uri
     if action:
@@ -158,7 +171,6 @@ async def google_auth(request: GoogleTokenRequest, fastapi_request: Request):
     """Handle Google OAuth token exchange - return token in response body"""
     
     # Add a simple cache to prevent duplicate processing
-    # You can use a simple dict or Redis in production
     if hasattr(fastapi_request.app.state, 'processed_codes'):
         if request.code in fastapi_request.app.state.processed_codes:
             print(f"⚠️ Code already processed, returning cached result")
@@ -169,20 +181,27 @@ async def google_auth(request: GoogleTokenRequest, fastapi_request: Request):
     try:
         print(f"🔍 Starting Google OAuth POST processing...")
         
-        # IMPORTANT: Get the original redirect URI from session or determine it
-        # This MUST match the one used in the authorization request
-        action = fastapi_request.session.get('oauth_action', 'signin')
+        # Get redirect URI from session or determine based on environment
         stored_redirect_uri = fastapi_request.session.get('oauth_redirect_uri')
         
         if stored_redirect_uri:
             redirect_uri = stored_redirect_uri
             print(f"📤 Using stored redirect_uri from session: {redirect_uri}")
         else:
-            # Fallback: construct from action
-            if action == 'signup':
-                redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
+            # Fallback: construct based on environment and action
+            action = fastapi_request.session.get('oauth_action', 'signin')
+            
+            if settings.ENVIRONMENT == "production":
+                if action == 'signup':
+                    redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
+                else:
+                    redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
             else:
-                redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
+                if action == 'signup':
+                    redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
+                else:
+                    redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
+            
             print(f"📤 Using constructed redirect_uri: {redirect_uri}")
         
         # Exchange code for tokens - PASS THE REDIRECT_URI
