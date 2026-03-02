@@ -23,7 +23,7 @@ class Settings:
                 "GOOGLE_REDIRECT_URI", 
                 "https://errandeasebackend.onrender.com/api/auth/google/callback"
             )
-            self.FRONTEND_URL = os.getenv("FRONTEND_URL", "https://your-frontend-domain.com")
+            self.FRONTEND_URL = os.getenv("FRONTEND_URL", "https://errandease.onrender.com")
         else:
             self.GOOGLE_REDIRECT_URI = os.getenv(
                 "GOOGLE_REDIRECT_URI", 
