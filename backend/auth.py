@@ -202,9 +202,9 @@ async def google_callback(request: Request):
         
         # Redirect based on user type
         if is_new:
-            redirect_url = f"{settings.FRONTEND_URL}/sign-up.html?token={access_token}"
+            redirect_url = f"{settings.FRONTEND_URL}/frontend/sign-up.html?token={access_token}"
         else:
-            redirect_url = f"{settings.FRONTEND_URL}/sign-in.html?token={access_token}"
+            redirect_url = f"{settings.FRONTEND_URL}/frontend/sign-in.html?token={access_token}"
         
         print(f"✅ Success! Redirecting to: {redirect_url}")
         
