@@ -74,6 +74,8 @@ async def google_login(request: Request, redirect_to: Optional[str] = None):
 
 @router.get("/google/callback")
 async def google_callback(request: Request):
+    print(f"🔍 Using redirect URI: {settings.GOOGLE_REDIRECT_URI}")
+    print(f"🌍 Environment: {settings.ENVIRONMENT}")
     """Handle Google OAuth callback"""
     try:
         # Verify state parameter for CSRF protection
