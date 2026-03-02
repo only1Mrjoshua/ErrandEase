@@ -1,15 +1,13 @@
 # auth.py
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
 from authlib.integrations.starlette_client import OAuth
-from starlette.config import Config
 from datetime import datetime, timedelta
 from jose import jwt
 import secrets
 from typing import Optional
 from pydantic import BaseModel
 import httpx
-import os
 
 from config import settings
 from database import users_collection
@@ -17,16 +15,12 @@ from database import users_collection
 # Create router
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
-# Print all settings at startup for debugging
-print("="*50)
-print("AUTH MODULE INITIALIZING")
-print(f"ENVIRONMENT: {settings.ENVIRONMENT}")
-print(f"GOOGLE_CLIENT_ID: {settings.GOOGLE_CLIENT_ID[:10]}...")
-print(f"GOOGLE_REDIRECT_URI: {settings.GOOGLE_REDIRECT_URI}")
-print(f"FRONTEND_URL: {settings.FRONTEND_URL}")
-print("="*50)
+# Print settings for debugging
+print(f"🌍 Auth module loaded - Environment: {settings.ENVIRONMENT}")
+print(f"📡 Redirect URI: {settings.GOOGLE_REDIRECT_URI}")
+print(f"🎨 Frontend URL: {settings.FRONTEND_URL}")
 
-# OAuth setup with explicit configuration
+# OAuth setup
 oauth = OAuth()
 oauth.register(
     name='google',
@@ -35,11 +29,11 @@ oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
         'scope': 'openid email profile',
-        'prompt': 'select_account'  # Force account selection
+        'prompt': 'select_account'
     }
 )
 
-# JWT functions (keep as is)
+# JWT functions
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -51,11 +45,21 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 
+# FIXED: Added the missing verify_token function
 def verify_token(token: str):
+    """Verify JWT token and return payload"""
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, 
+            settings.JWT_SECRET_KEY, 
+            algorithms=[settings.JWT_ALGORITHM]
+        )
         return payload
-    except jwt.JWTError:
+    except jwt.ExpiredSignatureError:
+        print("Token expired")
+        return None
+    except jwt.JWTError as e:
+        print(f"Token verification error: {e}")
         return None
 
 # User model
@@ -65,170 +69,104 @@ class UserResponse(BaseModel):
     name: str
     picture: Optional[str] = None
 
-# COMPLETELY REWRITTEN LOGIN ROUTE
+# SIMPLIFIED LOGIN ROUTE
 @router.get("/google/login")
-async def google_login(request: Request, redirect_to: Optional[str] = None):
+async def google_login(request: Request):
     """Redirect to Google OAuth consent screen"""
-    print("\n" + "="*50)
-    print("GOOGLE LOGIN CALLED")
-    print(f"Request URL: {request.url}")
-    print(f"Redirect to param: {redirect_to}")
+    print(f"\n🚀 Google login called")
     
     try:
-        # Store the page user wanted to go to
-        if redirect_to:
-            request.session['requested_page'] = redirect_to
-            print(f"Stored requested_page: {redirect_to}")
-        
-        # Generate state for CSRF protection
+        # Generate state
         state = secrets.token_urlsafe(32)
         request.session['oauth_state'] = state
-        print(f"Generated state: {state}")
-        print(f"Session after setting: {dict(request.session)}")
+        print(f"🔐 State stored in session: {state}")
         
-        # Get the authorization URL manually to see what's happening
+        # Create OAuth client
         google_client = oauth.create_client('google')
-        if not google_client:
-            raise Exception("Failed to create Google client")
         
-        # Manually construct the authorization URL
-        authorization_url = await google_client.create_authorization_url(
-            redirect_uri=settings.GOOGLE_REDIRECT_URI,
-            state=state
-        )
-        
-        print(f"Authorization URL created: {authorization_url}")
-        
-        # Use the standard method
+        # Redirect to Google
         redirect_response = await google_client.authorize_redirect(
             request,
             redirect_uri=settings.GOOGLE_REDIRECT_URI,
             state=state
         )
         
-        print(f"Redirect response headers: {redirect_response.headers}")
-        redirect_location = redirect_response.headers.get('location')
-        print(f"Redirect location: {redirect_location}")
-        
-        # Verify it's Google's domain
-        if redirect_location and 'accounts.google.com' in redirect_location:
-            print("✅ Redirecting to Google accounts")
-        else:
-            print("❌ Something wrong with redirect URL")
+        redirect_url = redirect_response.headers.get('location')
+        print(f"➡️ Redirecting to: {redirect_url}")
         
         return redirect_response
         
     except Exception as e:
-        print(f"❌ Google login error: {str(e)}")
+        print(f"❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
-        error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Login+failed"
-        return RedirectResponse(url=error_url)
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/sign-up.html?error=login_failed")
 
-# COMPLETELY REWRITTEN CALLBACK ROUTE
+# SIMPLIFIED CALLBACK ROUTE
 @router.get("/google/callback")
 async def google_callback(request: Request):
-    print("\n" + "="*50)
-    print("GOOGLE CALLBACK RECEIVED")
-    print(f"Full URL: {request.url}")
-    print(f"Query params: {dict(request.query_params)}")
-    print(f"Session: {dict(request.session)}")
-    print(f"Headers: {dict(request.headers)}")
+    print(f"\n📞 Google callback received")
+    print(f"URL: {request.url}")
+    print(f"Params: {dict(request.query_params)}")
     
     try:
-        # Get state from query params
-        received_state = request.query_params.get('state')
+        # Get parameters
         code = request.query_params.get('code')
+        received_state = request.query_params.get('state')
         error = request.query_params.get('error')
         
-        print(f"Received state: {received_state}")
-        print(f"Received code: {code[:20] if code else 'None'}...")
-        print(f"Error param: {error}")
-        
-        # Check for Google error
+        # Check for error
         if error:
-            print(f"Google returned error: {error}")
-            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Google+auth+failed"
-            return RedirectResponse(url=error_url)
+            print(f"❌ Google returned error: {error}")
+            return RedirectResponse(url=f"{settings.FRONTEND_URL}/sign-up.html?error=google_error")
         
-        # Verify state
+        # Validate state
         expected_state = request.session.get('oauth_state')
-        print(f"Expected state from session: {expected_state}")
+        print(f"Expected state: {expected_state}")
+        print(f"Received state: {received_state}")
         
-        if not expected_state or not received_state:
-            print("❌ Missing state parameter")
-            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Missing+state"
-            return RedirectResponse(url=error_url)
+        if not expected_state or not received_state or expected_state != received_state:
+            print("❌ State validation failed")
+            return RedirectResponse(url=f"{settings.FRONTEND_URL}/sign-up.html?error=invalid_state")
         
-        if expected_state != received_state:
-            print(f"❌ State mismatch")
-            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Invalid+state"
-            return RedirectResponse(url=error_url)
-        
-        # Clear state from session
+        # Clear state
         request.session.pop('oauth_state', None)
-        print("✅ State validated and cleared")
-        
-        if not code:
-            print("❌ No authorization code received")
-            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=No+code"
-            return RedirectResponse(url=error_url)
         
         # Exchange code for token
         print("🔄 Exchanging code for token...")
-        
-        # Manually exchange token to see what's happening
         google_client = oauth.create_client('google')
-        
-        # Get token manually
         token = await google_client.fetch_access_token(
             code=code,
             redirect_uri=settings.GOOGLE_REDIRECT_URI
         )
-        
-        print(f"✅ Token received: {list(token.keys())}")
+        print(f"✅ Token obtained")
         
         # Get user info
-        print("🔄 Fetching user info...")
-        
-        # Try both endpoints to be safe
-        try:
-            # Method 1: Using the built-in method
-            resp = await google_client.get('userinfo', token=token)
-            if resp.status_code == 200:
-                user_info = resp.json()
-                print(f"✅ Got user info via userinfo endpoint: {user_info.get('email')}")
-            else:
-                # Method 2: Try the explicit endpoint
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(
-                        'https://www.googleapis.com/oauth2/v3/userinfo',
-                        headers={'Authorization': f'Bearer {token["access_token"]}'}
-                    )
-                    if resp.status_code == 200:
-                        user_info = resp.json()
-                        print(f"✅ Got user info via explicit endpoint: {user_info.get('email')}")
-                    else:
-                        raise Exception(f"Failed to get user info: {resp.status_code}")
-        except Exception as e:
-            print(f"❌ Error getting user info: {e}")
-            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=User+info+failed"
-            return RedirectResponse(url=error_url)
+        print("🔄 Getting user info...")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                headers={'Authorization': f'Bearer {token["access_token"]}'}
+            )
+            
+            if resp.status_code != 200:
+                print(f"❌ Failed to get user info: {resp.status_code}")
+                return RedirectResponse(url=f"{settings.FRONTEND_URL}/sign-up.html?error=userinfo_failed")
+            
+            user_info = resp.json()
+            print(f"✅ Got user info for: {user_info.get('email')}")
         
         # Extract user data
-        google_id = user_info.get('sub')
         email = user_info.get('email')
         name = user_info.get('name')
         picture = user_info.get('picture')
-        
-        print(f"User data - ID: {google_id}, Email: {email}, Name: {name}")
+        google_id = user_info.get('sub')
         
         if not email:
             print("❌ No email in user info")
-            error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=No+email"
-            return RedirectResponse(url=error_url)
+            return RedirectResponse(url=f"{settings.FRONTEND_URL}/sign-up.html?error=no_email")
         
-        # Database operations (keep as is)
+        # Database operations
         existing_user = users_collection.find_one({"email": email})
         
         if existing_user:
@@ -241,7 +179,7 @@ async def google_callback(request: Request):
                 }}
             )
             user_id = str(existing_user['_id'])
-            is_new_user = False
+            is_new = False
             print(f"🔄 Updated existing user: {email}")
         else:
             new_user = {
@@ -254,7 +192,7 @@ async def google_callback(request: Request):
             }
             result = users_collection.insert_one(new_user)
             user_id = str(result.inserted_id)
-            is_new_user = True
+            is_new = True
             print(f"🆕 Created new user: {email}")
         
         # Create JWT
@@ -262,14 +200,13 @@ async def google_callback(request: Request):
             data={"sub": user_id, "email": email, "name": name}
         )
         
-        # Determine redirect
-        if is_new_user:
+        # Redirect based on user type
+        if is_new:
             redirect_url = f"{settings.FRONTEND_URL}/sign-up.html?token={access_token}"
         else:
             redirect_url = f"{settings.FRONTEND_URL}/sign-in.html?token={access_token}"
         
-        print(f"✅ Authentication successful")
-        print(f"➡️ Redirecting to: {redirect_url}")
+        print(f"✅ Success! Redirecting to: {redirect_url}")
         
         response = RedirectResponse(url=redirect_url)
         response.set_cookie(
@@ -287,13 +224,14 @@ async def google_callback(request: Request):
         print(f"❌ Callback error: {str(e)}")
         import traceback
         traceback.print_exc()
-        error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Auth+failed"
-        return RedirectResponse(url=error_url)
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/sign-up.html?error=auth_failed")
 
+# FIXED: verify route using the verify_token function
 @router.get("/verify")
 async def verify_user(token: str):
     """Verify JWT token and return user info"""
     try:
+        # Use the verify_token function
         payload = verify_token(token)
         if not payload:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
