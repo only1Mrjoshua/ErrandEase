@@ -14,7 +14,7 @@ app = FastAPI(title="ErrandEase API")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5500", "http://127.0.0.1:5500"],
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:5500", "http://127.0.0.1:5500", "https://errandease.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
