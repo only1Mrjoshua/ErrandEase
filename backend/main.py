@@ -50,11 +50,14 @@ async def health_check():
         "database": "connected" if client else "disconnected"
     }
 
-# ✅ Serve your frontend in TWO ways:
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # ERRANDEASE root
+# ✅ Serve your frontend in TWO ways (Render + Localhost paths)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # ERRANDEASE root
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-frontend")
+# 1) Localhost-style alias: /frontend/js/...  (NO html fallback here)
+app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="static-frontend")
+
+# 2) Render-style root: /js/... plus html fallback
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-root")
 
 
