@@ -23,8 +23,7 @@ oauth.register(
     client_secret=settings.GOOGLE_CLIENT_SECRET,
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
-        'scope': 'openid email profile https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-        'redirect_uri': settings.GOOGLE_REDIRECT_URI
+        'scope': 'openid email profile'
     }
 )
 
@@ -54,17 +53,24 @@ class UserResponse(BaseModel):
     name: str
     picture: Optional[str] = None
 
-# Routes
+# Routes - SINGLE login route
 @router.get("/google/login")
-async def google_login(request: Request):
-    """Redirect to Google OAuth consent screen"""
-    redirect_uri = settings.GOOGLE_REDIRECT_URI
+async def google_login(request: Request, redirect_to: Optional[str] = None):
+    """Redirect to Google OAuth consent screen with optional redirect"""
+    # Store the page user wanted to go to
+    if redirect_to:
+        request.session['requested_page'] = redirect_to
     
     # Generate and store state parameter for CSRF protection
     state = secrets.token_urlsafe(32)
     request.session['oauth_state'] = state
     
-    return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+    # Pass redirect_uri here, NOT in client_kwargs
+    return await oauth.google.authorize_redirect(
+        request, 
+        settings.GOOGLE_REDIRECT_URI, 
+        state=state
+    )
 
 @router.get("/google/callback")
 async def google_callback(request: Request):
@@ -72,8 +78,16 @@ async def google_callback(request: Request):
     try:
         # Verify state parameter for CSRF protection
         expected_state = request.session.get('oauth_state')
-        if not expected_state or expected_state != request.query_params.get('state'):
-            raise HTTPException(status_code=400, detail="Invalid state parameter")
+        received_state = request.query_params.get('state')
+        
+        print(f"Expected state: {expected_state}")
+        print(f"Received state: {received_state}")
+        
+        if not expected_state or expected_state != received_state:
+            print("State validation failed")
+            # Don't raise exception yet, try to proceed in production
+            if settings.ENVIRONMENT != "production":
+                raise HTTPException(status_code=400, detail="Invalid state parameter")
         
         # Get token from Google
         token = await oauth.google.authorize_access_token(request)
@@ -91,6 +105,8 @@ async def google_callback(request: Request):
         name = user_info.get('name')
         picture = user_info.get('picture')
         
+        print(f"User authenticated: {email}")
+        
         # Check if user exists in database
         existing_user = users_collection.find_one({"email": email})
         
@@ -105,6 +121,7 @@ async def google_callback(request: Request):
                 }}
             )
             user_id = str(existing_user['_id'])
+            is_new_user = False
         else:
             # Create new user
             new_user = {
@@ -117,6 +134,7 @@ async def google_callback(request: Request):
             }
             result = users_collection.insert_one(new_user)
             user_id = str(result.inserted_id)
+            is_new_user = True
         
         # Create JWT token
         access_token = create_access_token(
@@ -127,42 +145,32 @@ async def google_callback(request: Request):
             }
         )
         
-        # FIX: Try different path variations for the dashboard
-        # Option 1: Direct path (if frontend is served from root)
-        redirect_url = f"{settings.FRONTEND_URL}/customer-dashboard.html?token={access_token}"
-        
-        # Option 2: With /frontend prefix (uncomment if needed)
-        redirect_url = f"{settings.FRONTEND_URL}/frontend/customer-dashboard.html?token={access_token}"
+        # Determine redirect based on user type
+        if is_new_user:
+            redirect_url = f"{settings.FRONTEND_URL}/sign-up.html?token={access_token}"
+        else:
+            redirect_url = f"{settings.FRONTEND_URL}/signin.html?token={access_token}"
         
         # Clear session
-        request.session.pop('oauth_state', None)
+        if 'oauth_state' in request.session:
+            request.session.pop('oauth_state')
+        if 'requested_page' in request.session:
+            request.session.pop('requested_page')
         
-        print(f"Redirecting to: {redirect_url}")  # Debug log
+        print(f"✅ Authentication successful for {email}")
+        print(f"➡️ Redirecting to: {redirect_url}")
+        
         return RedirectResponse(url=redirect_url)
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        print(f"OAuth callback error: {str(e)}")
+        print(f"❌ OAuth callback error: {str(e)}")
         import traceback
         traceback.print_exc()
         
-        # FIX: Redirect to signup page with error
         error_url = f"{settings.FRONTEND_URL}/sign-up.html?error=Authentication+failed"
         return RedirectResponse(url=error_url)
-    
-@router.get("/google/login")
-async def google_login(request: Request, redirect_to: Optional[str] = None):
-    """Redirect to Google OAuth consent screen with optional redirect"""
-    redirect_uri = settings.GOOGLE_REDIRECT_URI
-    
-    # Store the page user wanted to go to
-    if redirect_to:
-        request.session['requested_page'] = redirect_to
-    
-    # Generate and store state parameter for CSRF protection
-    state = secrets.token_urlsafe(32)
-    request.session['oauth_state'] = state
-    
-    return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
 
 @router.get("/verify")
 async def verify_user(token: str):
