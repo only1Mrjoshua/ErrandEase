@@ -1,43 +1,40 @@
-# main.py
+# main.py - CORRECTED VERSION
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 
 from config import settings
-from database import client  # Your existing MongoDB connection
+from database import client
 import auth
 
-# Create FastAPI app
 app = FastAPI(title="ErrandEase API")
 
-# CORS middleware - make sure this includes both frontend and backend
+# CORS middleware - updated for production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        settings.FRONTEND_URL, 
-        "http://localhost:5500", 
-        "http://127.0.0.1:5500", 
+        settings.FRONTEND_URL,
         "https://errandease.onrender.com",
-        "https://errandeasebackend.onrender.com"  # Add backend itself
+        "http://localhost:5500",
+        "http://127.0.0.1:5500"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# SessionMiddleware
+# Session middleware - FIXED: removed 'domain' parameter
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.JWT_SECRET_KEY,
     session_cookie="errandease_session",
-    max_age=3600,
-    same_site="none",  # CHANGE THIS TO "none"
-    https_only=True,   # MUST be True when same_site="none"
-    domain=None        # Let it handle domain automatically
+    max_age=3600,  # 1 hour
+    same_site="none",  # Required for cross-origin requests
+    https_only=True,   # Must be True when same_site="none" in production
+    # REMOVED: domain parameter (not supported)
 )
 
-# Include routers
 app.include_router(auth.router)
 
 @app.get("/")
