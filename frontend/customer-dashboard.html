@@ -193,11 +193,13 @@
               class="text-sm text-slate-500 hidden sm:block"
               id="greeting-container"
             ></span>
-            <div
-              class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary"
-            >
-              <span class="material-symbols-outlined">account_circle</span>
-            </div>
+            <a href="#" id="profile-icon-link" class="block">
+              <div
+                class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-colors"
+              >
+                <span class="material-symbols-outlined">account_circle</span>
+              </div>
+            </a>
           </div>
         </div>
 
@@ -627,6 +629,20 @@
             handleNavClick(e, link.getAttribute("data-tab")),
           ),
         );
+
+        // Make profile icon clickable
+        const profileIconLink = document.getElementById("profile-icon-link");
+        if (profileIconLink) {
+          profileIconLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            setActiveTab("profile");
+
+            // Close sidebar on mobile if open
+            if (window.innerWidth < 768) {
+              closeSidebar();
+            }
+          });
+        }
 
         // initial active
         setActiveTab("request");
