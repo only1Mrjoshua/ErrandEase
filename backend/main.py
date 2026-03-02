@@ -1,8 +1,10 @@
-# main.py - CORRECTED VERSION
+# main.py - UPDATED (keeps /frontend/ paths working on Render)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
+import os
 
 from config import settings
 from database import client
@@ -24,17 +26,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session middleware - FIXED: removed 'domain' parameter
+# Session middleware
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.JWT_SECRET_KEY,
     session_cookie="errandease_session",
-    max_age=3600,  # 1 hour
+    max_age=3600,      # 1 hour
     same_site="none",  # Required for cross-origin requests
     https_only=True,   # Must be True when same_site="none" in production
-    # REMOVED: domain parameter (not supported)
 )
 
+# API routes
 app.include_router(auth.router)
 
 @app.get("/")
@@ -47,6 +49,15 @@ async def health_check():
         "status": "healthy",
         "database": "connected" if client else "disconnected"
     }
+
+# ✅ Serve your frontend in TWO ways:
+# 1) Render-style: /js/... and /images/... (root mount)
+# 2) Localhost-style: /frontend/js/... and /frontend/images/... (alias mount)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # ERRANDEASE root
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-root")
+app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-frontend")
 
 if __name__ == "__main__":
     uvicorn.run(
