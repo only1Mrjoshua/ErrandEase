@@ -1,10 +1,7 @@
-// js/auth.js - COMPLETE FIXED VERSION
+// js/auth.js
 
 // Wait for DOM to load
 document.addEventListener('DOMContentLoaded', function() {
-    // First, check if this is an OAuth callback
-    handleOAuthCallback();
-    
     // Initialize auth module
     window.auth = {
         // Show loading overlay
@@ -92,35 +89,6 @@ document.addEventListener('DOMContentLoaded', function() {
             window.location.href = googleAuthUrl;
         },
 
-        // Handle token from redirect
-        handleTokenRedirect: function(token) {
-            this.showLoading('Completing sign in...');
-            
-            // Store token
-            localStorage.setItem('auth_token', token);
-            
-            // Verify token and get user info
-            this.verifyToken(token).then(user => {
-                if (user) {
-                    localStorage.setItem('user', JSON.stringify(user));
-                    this.showNotification('Successfully signed in!', 'success');
-                    
-                    // Redirect to dashboard
-                    setTimeout(() => {
-                        window.location.href = '/customer-dashboard.html';
-                    }, 1500);
-                } else {
-                    this.showNotification('Failed to verify user', 'error');
-                    localStorage.removeItem('auth_token');
-                }
-                this.hideLoading();
-            }).catch(error => {
-                console.error('Token verification error:', error);
-                this.showNotification('Authentication failed', 'error');
-                this.hideLoading();
-            });
-        },
-
         // Sign out
         signOut: async function() {
             try {
@@ -200,36 +168,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return true;
             }
             return false;
-        },
-
-        // NEW: Check for token in URL (for redirect from backend)
-        checkForToken: function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
-            
-            if (token) {
-                // Clean up URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-                this.handleTokenRedirect(token);
-                return true;
-            }
-            return false;
         }
     };
 
-    // Bind methods to ensure 'this' context
-    window.auth.handleTokenRedirect = window.auth.handleTokenRedirect.bind(window.auth);
-    window.auth.checkForToken = window.auth.checkForToken.bind(window.auth);
-
-    // Check for token in URL first
-    if (!window.auth.checkForToken()) {
-        // If no token, proceed with normal initialization
-        initializeNormalAuth();
-    }
-});
-
-// Separate function for normal auth initialization
-function initializeNormalAuth() {
     // Attach event listeners to Google Sign In buttons
     const googleSignInBtn = document.getElementById('googleSignInBtn');
     if (googleSignInBtn) {
@@ -249,31 +190,4 @@ function initializeNormalAuth() {
     });
 
     console.log('Auth module initialized with BACKEND_URL:', BACKEND_URL);
-}
-
-// NEW: Handle OAuth callback from Google
-function handleOAuthCallback() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
-    
-    // Check if this is an OAuth callback (has code or error params)
-    if (code || error) {
-        console.log('📞 OAuth callback detected');
-        
-        // Show loading
-        if (window.auth) {
-            window.auth.showLoading('Completing sign in...');
-        }
-        
-        // This page is the callback URL - we need to forward to backend
-        // The backend will complete the OAuth flow and redirect back with token
-        const callbackUrl = `${BACKEND_URL}/api/auth/google/callback${window.location.search}`;
-        
-        // Redirect to backend callback
-        window.location.href = callbackUrl;
-        return true;
-    }
-    return false;
-}
+});
