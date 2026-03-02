@@ -188,16 +188,20 @@
             <span class="material-symbols-outlined">menu_open</span>
           </button>
 
-          <div class="flex-1 flex justify-end items-center gap-3">
+          <div
+            class="flex-1 flex justify-end items-center gap-1 sm:gap-3 min-w-0"
+          >
             <span
-              class="text-sm text-slate-500 hidden sm:block"
+              class="text-xs sm:text-sm text-slate-500 block flex-1 text-right mr-1 whitespace-normal"
               id="greeting-container"
             ></span>
-            <a href="#" id="profile-icon-link" class="block">
+            <a href="#" id="profile-icon-link" class="block flex-shrink-0">
               <div
-                class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-colors"
+                class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-colors"
               >
-                <span class="material-symbols-outlined">account_circle</span>
+                <span class="material-symbols-outlined text-xl sm:text-2xl"
+                  >account_circle</span
+                >
               </div>
             </a>
           </div>
