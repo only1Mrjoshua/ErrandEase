@@ -26,14 +26,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session middleware - FIXED: removed invalid 'domain' parameter
+# SessionMiddleware
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.JWT_SECRET_KEY,
     session_cookie="errandease_session",
-    max_age=3600,  # 1 hour
-    same_site="lax",  # This is valid
-    https_only=False,  # This is valid (called 'https_only' not 'secure')
+    max_age=3600,
+    same_site="none",  # CHANGE THIS TO "none"
+    https_only=True,   # MUST be True when same_site="none"
+    domain=None        # Let it handle domain automatically
 )
 
 # Include routers
