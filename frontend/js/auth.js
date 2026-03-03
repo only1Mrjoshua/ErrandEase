@@ -202,13 +202,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Redirect based on user role
                 setTimeout(() => {
-                    // You can customize this based on your actual user roles
                     if (data.user.role === 'admin') {
-                        window.location.href = '/frontend/admin-dashboard.html';
+                        window.location.href = 'admin-dashboard.html';
                     } else if (data.user.role === 'provider') {
-                        window.location.href = '/frontend/provider-dashboard.html';
+                        window.location.href = 'provider-dashboard.html';
                     } else {
-                        window.location.href = '/frontend/customer-dashboard.html';
+                        window.location.href = 'customer-dashboard.html';
                     }
                 }, 1500);
                 
@@ -318,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
 
         // Redirect if already authenticated
-        redirectIfAuthenticated: function(redirectTo = '/frontend/customer-dashboard.html') {
+        redirectIfAuthenticated: function(redirectTo = 'customer-dashboard.html') {
             if (this.isAuthenticated()) {
                 window.location.href = redirectTo;
                 return true;
@@ -398,7 +397,7 @@ document.addEventListener('DOMContentLoaded', function() {
             window.auth.verifyToken(token).then(user => {
                 if (user) {
                     localStorage.setItem('user', JSON.stringify(user));
-                    window.location.href = '/frontend/customer-dashboard.html';
+                    window.location.href = 'customer-dashboard.html';
                 }
             });
         }
