@@ -6,19 +6,28 @@ const BACKEND_URL = isLocalhost
     ? 'http://localhost:8000'                   
     : 'https://errandeasebackend.onrender.com';
 
-// Security configuration
+// Security configuration for token-based auth
 const SECURITY_CONFIG = {
-    // Don't store tokens in localStorage - use HttpOnly cookies
-    useLocalStorage: false,
+    // Using localStorage for tokens (with XSS precautions)
+    useLocalStorage: true,
+    tokenKey: 'access_token',
+    refreshTokenKey: 'refresh_token',
+    userKey: 'user',
     
-    // Always use credentials: 'include' for cookie-based auth
+    // Default fetch options without credentials
     fetchOptions: {
-        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
         }
-    }
+    },
+    
+    // Helper to add auth header
+    getAuthHeaders: (token) => ({
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+    })
 };
 
 console.log('🔧 Environment:', isLocalhost ? 'Development' : 'Production');
 console.log('🔧 Backend URL:', BACKEND_URL);
+console.log('🔧 Auth mode: Token-based (Authorization headers)');
