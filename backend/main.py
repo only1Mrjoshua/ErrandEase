@@ -1,75 +1,95 @@
-# main.py - UPDATED FIX (alias /frontend/* -> serve from frontend/)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import Response
+from fastapi.responses import FileResponse, JSONResponse
 import uvicorn
 import os
 import mimetypes
+import logging
 
 from config import settings
 from database import client
 import auth
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="ErrandEase API")
+
+# CORS configuration
+origins = [
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
-        "https://errandease.onrender.com",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Trusted hosts
 app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.JWT_SECRET_KEY,
-    session_cookie="errandease_session",
-    max_age=3600,
-    same_site="none",
-    https_only=True,
+    TrustedHostMiddleware,
+    allowed_hosts=[
+        "localhost",
+        "127.0.0.1",
+        "errandeasebackend.onrender.com",
+        "errandease.onrender.com",
+    ]
 )
 
+# Include routers
 app.include_router(auth.router)
 
 @app.get("/")
 async def root():
-    return {"message": "ErrandEase API", "status": "running"}
+    return {"message": "ErrandEase API", "status": "running", "environment": settings.ENVIRONMENT}
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "database": "connected" if client else "disconnected"}
+    return {
+        "status": "healthy", 
+        "database": "connected" if client else "disconnected",
+        "environment": settings.ENVIRONMENT
+    }
 
-
-# ---------- STATIC PATHS ----------
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # ERRANDEASE root
+# Static files
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-# ✅ 1) Alias route: /frontend/... -> maps to FRONTEND_DIR/...
-@app.get("/frontend/{filepath:path}")
-async def frontend_alias(filepath: str):
-    full_path = os.path.normpath(os.path.join(FRONTEND_DIR, filepath))
+if os.path.exists(FRONTEND_DIR):
+    @app.get("/frontend/{filepath:path}")
+    async def frontend_alias(filepath: str):
+        full_path = os.path.normpath(os.path.join(FRONTEND_DIR, filepath))
 
-    # basic safety: keep it inside FRONTEND_DIR
-    if not full_path.startswith(os.path.normpath(FRONTEND_DIR)):
-        return Response("Invalid path", status_code=400)
+        if not full_path.startswith(os.path.normpath(FRONTEND_DIR)):
+            return JSONResponse({"error": "Invalid path"}, status_code=400)
 
-    if os.path.exists(full_path) and os.path.isfile(full_path):
-        media_type, _ = mimetypes.guess_type(full_path)
-        return FileResponse(full_path, media_type=media_type or "application/octet-stream")
+        if os.path.exists(full_path) and os.path.isfile(full_path):
+            media_type, _ = mimetypes.guess_type(full_path)
+            return FileResponse(full_path, media_type=media_type or "application/octet-stream")
 
-    return Response("Not found", status_code=404)
+        return JSONResponse({"error": "Not found"}, status_code=404)
 
-# ✅ 2) Normal Render-style static: /js/... /images/... etc.
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-root")
-
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-root")
+    logger.info(f"Serving static files from {FRONTEND_DIR}")
+else:
+    logger.warning(f"Frontend directory not found: {FRONTEND_DIR}")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=8000, 
+        reload=settings.ENVIRONMENT != "production"
+    )

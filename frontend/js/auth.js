@@ -1,4 +1,4 @@
-// js/auth.js - FIXED VERSION with duplicate exchange prevention
+// js/auth.js - Production version with Authorization headers
 
 // Wait for DOM to load
 document.addEventListener('DOMContentLoaded', function() {
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
 
-        // Show notification
+        // Show notification - SAFE version with textContent
         showNotification: function(message, type = 'info', duration = 5000) {
             const container = document.getElementById('notificationContainer');
             if (!container) return;
@@ -33,32 +33,55 @@ document.addEventListener('DOMContentLoaded', function() {
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             
-            // Add icon based on type
-            let icon = '';
+            // Build DOM safely - no innerHTML with untrusted content
+            const flexDiv = document.createElement('div');
+            flexDiv.className = 'flex items-start gap-3';
+            
+            // Icon span
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'material-symbols-outlined';
             switch(type) {
                 case 'success':
-                    icon = 'check_circle';
+                    iconSpan.className += ' text-green-500';
+                    iconSpan.textContent = 'check_circle';
                     break;
                 case 'error':
-                    icon = 'error';
+                    iconSpan.className += ' text-red-500';
+                    iconSpan.textContent = 'error';
                     break;
                 case 'info':
-                    icon = 'info';
+                    iconSpan.className += ' text-blue-500';
+                    iconSpan.textContent = 'info';
                     break;
             }
-
-            notification.innerHTML = `
-                <div class="flex items-start gap-3">
-                    <span class="material-symbols-outlined text-${type === 'error' ? 'red' : type === 'success' ? 'green' : 'blue'}-500">${icon}</span>
-                    <div class="flex-1">
-                        <p class="text-sm font-medium">${message}</p>
-                    </div>
-                    <button onclick="this.parentElement.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                        <span class="material-symbols-outlined text-sm">close</span>
-                    </button>
-                </div>
-            `;
-
+            
+            // Content div
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'flex-1';
+            
+            const messageP = document.createElement('p');
+            messageP.className = 'text-sm font-medium';
+            messageP.textContent = message; // SAFE: textContent, not innerHTML
+            
+            contentDiv.appendChild(messageP);
+            
+            // Close button
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300';
+            closeBtn.onclick = () => notification.remove();
+            
+            const closeIcon = document.createElement('span');
+            closeIcon.className = 'material-symbols-outlined text-sm';
+            closeIcon.textContent = 'close';
+            
+            closeBtn.appendChild(closeIcon);
+            
+            // Assemble
+            flexDiv.appendChild(iconSpan);
+            flexDiv.appendChild(contentDiv);
+            flexDiv.appendChild(closeBtn);
+            notification.appendChild(flexDiv);
+            
             container.appendChild(notification);
 
             // Trigger animation
@@ -84,7 +107,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get Google Auth URL from backend
         getGoogleAuthUrl: async function(action = 'signin') {
             try {
-                // Pass action as query parameter to backend
                 const response = await fetch(`${BACKEND_URL}/api/auth/google/url?action=${action}`);
                 const data = await response.json();
                 return data.auth_url;
@@ -94,27 +116,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
 
-        // Google Sign In - For sign-in page
+        // Google Sign In
         googleSignIn: function() {
             this.showLoading('Redirecting to Google...');
             this.initiateGoogleAuth('signin');
         },
 
-        // Google Sign Up - For sign-up page
+        // Google Sign Up
         googleSignUp: function() {
             this.showLoading('Redirecting to Google...');
             this.initiateGoogleAuth('signup');
         },
 
-        // Initiate Google OAuth flow - FIXED: removed duplicate state parameter
+        // Initiate Google OAuth flow
         initiateGoogleAuth: async function(action = 'signin') {
             try {
-                // Get the auth URL from backend (backend now handles action)
                 const authUrl = await this.getGoogleAuthUrl(action);
                 
                 if (authUrl) {
                     console.log(`Redirecting to Google for ${action}...`);
-                    // Redirect to Google - DON'T add any extra parameters
                     window.location.href = authUrl;
                 } else {
                     throw new Error('Failed to get auth URL');
@@ -126,14 +146,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
 
-        // Handle OAuth callback - This runs when Google redirects back with code
+        // Handle OAuth callback
         handleOAuthCallback: function() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
             const error = urlParams.get('error');
-            const state = urlParams.get('state') || 'signin';
+            const state = urlParams.get('state');
             
-            console.log('OAuth callback detected', { code: !!code, error, state });
+            console.log('OAuth callback detected', { code: !!code, error, state: !!state });
             
             if (error) {
                 // Handle error from Google
@@ -143,18 +163,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Redirect back to appropriate page after showing error
                 setTimeout(() => {
-                    window.location.href = state === 'signup' ? '/frontend/sign-up.html' : '/frontend/sign-in.html';
+                    window.location.href = '/frontend/sign-in.html';
                 }, 2000);
                 return;
             }
             
-            if (code) {
+            if (code && state) {
                 // Exchange code for token
                 this.exchangeCodeForToken(code, state);
             }
         },
 
-        // Exchange code for token via POST to backend - WITH DUPLICATE PREVENTION
+        // Exchange code for token via POST to backend
         exchangeCodeForToken: async function(code, state) {
             // Prevent multiple simultaneous exchanges
             if (this.isExchangingToken) {
@@ -168,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 console.log('Exchanging code for token...');
                 
-                // Clear the code from URL immediately to prevent reuse on page refresh
+                // Clear the code from URL immediately
                 window.history.replaceState({}, document.title, window.location.pathname);
                 
                 const response = await fetch(`${BACKEND_URL}/api/auth/google`, {
@@ -176,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ code: code })
+                    body: JSON.stringify({ code: code, state: state })
                 });
 
                 if (!response.ok) {
@@ -185,20 +205,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 const data = await response.json();
-                console.log('Authentication successful', data);
+                console.log('Authentication successful');
                 
-                // Store auth data
-                localStorage.setItem('auth_token', data.access_token);
-                localStorage.setItem('token_type', data.token_type);
+                // Store tokens in localStorage
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
                 localStorage.setItem('user', JSON.stringify(data.user));
                 
                 // Show success message
                 this.showNotification('Successfully signed in!', 'success');
-                
-                // Store action type for welcome message if needed
-                if (data.user.is_new) {
-                    localStorage.setItem('welcome_new_user', 'true');
-                }
                 
                 // Redirect based on user role
                 setTimeout(() => {
@@ -213,18 +228,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 
             } catch (error) {
                 console.error('Token exchange error:', error);
+                this.showNotification(error.message || 'Authentication failed', 'error');
                 
-                // Only show error if we're not already on a dashboard page
-                // This prevents showing errors after successful redirect
-                const currentPath = window.location.pathname;
-                if (!currentPath.includes('dashboard')) {
-                    this.showNotification(error.message || 'Authentication failed', 'error');
-                    
-                    // Redirect back to sign in/up page
-                    setTimeout(() => {
-                        window.location.href = state === 'signup' ? '/frontend/sign-up.html' : '/frontend/sign-in.html';
-                    }, 2000);
-                }
+                setTimeout(() => {
+                    window.location.href = '/frontend/sign-in.html';
+                }, 2000);
                 
             } finally {
                 this.isExchangingToken = false;
@@ -235,11 +243,71 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check for OAuth callback on page load
         checkForOAuthCallback: function() {
             const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('code') || urlParams.has('error')) {
+            if (urlParams.has('code') && urlParams.has('state')) {
                 this.handleOAuthCallback();
                 return true;
             }
             return false;
+        },
+
+        // Refresh access token
+        refreshToken: async function() {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) return null;
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/auth/refresh?refresh_token=${refreshToken}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    // If refresh fails, clear everything and redirect to login
+                    this.clearAuth();
+                    window.location.href = '/frontend/sign-in.html';
+                    return null;
+                }
+                
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                return data.access_token;
+            } catch (error) {
+                console.error('Error refreshing token:', error);
+                this.clearAuth();
+                window.location.href = '/frontend/sign-in.html';
+                return null;
+            }
+        },
+
+        // Make authenticated fetch request
+        authenticatedFetch: async function(url, options = {}) {
+            let token = localStorage.getItem('access_token');
+            
+            if (!token) {
+                window.location.href = '/frontend/sign-in.html';
+                return null;
+            }
+            
+            // Add authorization header
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`
+            };
+            
+            let response = await fetch(url, options);
+            
+            // If token expired, try to refresh
+            if (response.status === 401) {
+                const newToken = await this.refreshToken();
+                if (newToken) {
+                    // Retry with new token
+                    options.headers['Authorization'] = `Bearer ${newToken}`;
+                    response = await fetch(url, options);
+                } else {
+                    return null;
+                }
+            }
+            
+            return response;
         },
 
         // Sign out
@@ -247,31 +315,25 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 this.showLoading('Signing out...');
                 
-                const token = localStorage.getItem('auth_token');
+                const refreshToken = localStorage.getItem('refresh_token');
                 
-                const response = await fetch(`${BACKEND_URL}/api/auth/logout`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    }
-                });
-
-                if (response.ok) {
-                    // Clear local storage
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('token_type');
-                    localStorage.removeItem('user');
-                    localStorage.removeItem('welcome_new_user');
-                    
-                    this.showNotification('Successfully signed out', 'success');
-                    
-                    // Redirect to home page
-                    setTimeout(() => {
-                        window.location.href = '/frontend/index.html';
-                    }, 1500);
-                } else {
-                    throw new Error('Logout failed');
+                if (refreshToken) {
+                    // Call logout endpoint to revoke refresh token
+                    await fetch(`${BACKEND_URL}/api/auth/logout?refresh_token=${refreshToken}`, {
+                        method: 'POST'
+                    });
                 }
+                
+                // Clear all auth data
+                this.clearAuth();
+                
+                this.showNotification('Successfully signed out', 'success');
+                
+                // Redirect to home page
+                setTimeout(() => {
+                    window.location.href = '/frontend/index.html';
+                }, 1500);
+                
             } catch (error) {
                 console.error('Logout error:', error);
                 this.showNotification('Failed to sign out. Please try again.', 'error');
@@ -280,31 +342,42 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
 
-        // Verify token and get user info
-        verifyToken: async function(token) {
+        // Clear all authentication data
+        clearAuth: function() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+        },
+
+        // Get current user info from API
+        getCurrentUser: async function() {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/auth/verify?token=${token}`);
+                const response = await this.authenticatedFetch(`${BACKEND_URL}/api/auth/me`);
                 
-                if (!response.ok) {
-                    throw new Error('Invalid token');
+                if (!response || !response.ok) {
+                    return null;
                 }
                 
-                return await response.json();
+                const userData = await response.json();
+                
+                // Update cached user
+                localStorage.setItem('user', JSON.stringify(userData));
+                return userData;
             } catch (error) {
-                console.error('Token verification error:', error);
+                console.error('Error getting current user:', error);
                 return null;
             }
         },
 
-        // Check authentication status
-        isAuthenticated: function() {
-            return !!localStorage.getItem('auth_token');
-        },
-
-        // Get current user profile
-        getCurrentUser: function() {
+        // Get user from localStorage (cached)
+        getCachedUser: function() {
             const userStr = localStorage.getItem('user');
             return userStr ? JSON.parse(userStr) : null;
+        },
+
+        // Check authentication status
+        isAuthenticated: function() {
+            return !!localStorage.getItem('access_token');
         },
 
         // Require authentication - redirect if not authenticated
@@ -325,83 +398,56 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         },
 
-        // Check for welcome message for new users
-        checkWelcomeMessage: function() {
-            if (localStorage.getItem('welcome_new_user') === 'true') {
-                this.showNotification('Welcome to ErrandEase! Your account has been created.', 'success', 6000);
-                localStorage.removeItem('welcome_new_user');
+        // Check if user has specific role
+        hasRole: function(role) {
+            const user = this.getCachedUser();
+            return user && user.role === role;
+        },
+
+        // Initialize auth on page
+        init: function() {
+            // Check for OAuth callback
+            const isCallback = this.checkForOAuthCallback();
+            
+            if (!isCallback) {
+                // Attach event listeners to Google Sign In button
+                const googleSignInBtn = document.getElementById('googleSignInBtn');
+                if (googleSignInBtn) {
+                    googleSignInBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.googleSignIn();
+                    });
+                }
+
+                // Attach event listeners to Google Sign Up button
+                const googleSignUpBtn = document.getElementById('googleSignUpBtn');
+                if (googleSignUpBtn) {
+                    googleSignUpBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.googleSignUp();
+                    });
+                }
+
+                // Attach event listeners to sign out buttons
+                const signOutBtns = document.querySelectorAll('.sign-out-btn');
+                signOutBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.signOut();
+                    });
+                });
+
+                // Auto-refresh token periodically (every 10 minutes)
+                setInterval(() => {
+                    if (this.isAuthenticated()) {
+                        this.refreshToken();
+                    }
+                }, 10 * 60 * 1000);
             }
         }
     };
 
-    // Bind methods to ensure 'this' context
-    window.auth.handleOAuthCallback = window.auth.handleOAuthCallback.bind(window.auth);
-    window.auth.exchangeCodeForToken = window.auth.exchangeCodeForToken.bind(window.auth);
-    window.auth.checkForOAuthCallback = window.auth.checkForOAuthCallback.bind(window.auth);
-    window.auth.checkWelcomeMessage = window.auth.checkWelcomeMessage.bind(window.auth);
-
-    // Check if this is an OAuth callback (has code in URL)
-    const isCallback = window.auth.checkForOAuthCallback();
-    
-    if (!isCallback) {
-        // Not a callback, proceed with normal initialization
-        
-        // Check for welcome message (for new users)
-        window.auth.checkWelcomeMessage();
-        
-        // Attach event listeners to Google Sign In button (for sign-in page)
-        const googleSignInBtn = document.getElementById('googleSignInBtn');
-        if (googleSignInBtn) {
-            // Remove existing listeners to prevent duplicates
-            const newBtn = googleSignInBtn.cloneNode(true);
-            googleSignInBtn.parentNode.replaceChild(newBtn, googleSignInBtn);
-            newBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                window.auth.googleSignIn();
-            });
-        }
-
-        // Attach event listeners to Google Sign Up button (for sign-up page)
-        const googleSignUpBtn = document.getElementById('googleSignUpBtn');
-        if (googleSignUpBtn) {
-            // Remove existing listeners to prevent duplicates
-            const newBtn = googleSignUpBtn.cloneNode(true);
-            googleSignUpBtn.parentNode.replaceChild(newBtn, googleSignUpBtn);
-            newBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                window.auth.googleSignUp();
-            });
-        }
-
-        // Attach event listeners to sign out buttons
-        const signOutBtns = document.querySelectorAll('.sign-out-btn');
-        signOutBtns.forEach(btn => {
-            // Remove existing listeners to prevent duplicates
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-            newBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                window.auth.signOut();
-            });
-        });
-
-        // Check for token in URL (backward compatibility)
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
-        if (token) {
-            // Clean URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-            // Store token
-            localStorage.setItem('auth_token', token);
-            // Verify and get user info
-            window.auth.verifyToken(token).then(user => {
-                if (user) {
-                    localStorage.setItem('user', JSON.stringify(user));
-                    window.location.href = 'customer-dashboard.html';
-                }
-            });
-        }
-    }
-
-    console.log('Auth module initialized with BACKEND_URL:', BACKEND_URL);
+    // Initialize
+    window.auth.init();
+    console.log('Auth module initialized with Authorization header auth');
 });

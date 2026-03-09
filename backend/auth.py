@@ -1,32 +1,49 @@
-# auth.py - TOKEN EXCHANGE PATTERN VERSION
-from fastapi import APIRouter, Request, HTTPException, status
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from authlib.integrations.starlette_client import OAuth
 from datetime import datetime, timedelta
 from jose import jwt
 import secrets
 from typing import Optional
-from pydantic import BaseModel
 import httpx
-import os
-import json
-import string
+from passlib.context import CryptContext
+import uuid
+import logging
 
 from config import settings
-from database import users_collection
+from database import users_collection, refresh_tokens_collection
+from models import (
+    GoogleTokenRequest, GoogleUserInfo, UserResponse,
+    User, AuthIdentity, RefreshToken, TokenResponse
+)
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+logger = logging.getLogger(__name__)
 
-# Print ALL settings at startup
-print("\n" + "="*60)
-print("🔍 DIAGNOSTIC MODE - CHECKING ALL SETTINGS")
-print("="*60)
-print(f"ENVIRONMENT: {settings.ENVIRONMENT}")
-print(f"FRONTEND_URL: {settings.FRONTEND_URL}")
-print(f"GOOGLE_REDIRECT_URI: {settings.GOOGLE_REDIRECT_URI}")
-print(f"GOOGLE_CLIENT_ID: {settings.GOOGLE_CLIENT_ID[:10]}...{settings.GOOGLE_CLIENT_ID[-10:]}")
-print(f"JWT_ALGORITHM: {settings.JWT_ALGORITHM}")
-print("="*60 + "\n")
+# Security scheme for bearer token
+security = HTTPBearer()
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Simple in-memory rate limiting
+rate_limit_store = {}
+
+def check_rate_limit(key: str, max_requests: int = 10, period: int = 60) -> bool:
+    """Simple rate limiting function"""
+    now = datetime.utcnow().timestamp()
+    
+    if key not in rate_limit_store:
+        rate_limit_store[key] = []
+    
+    rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < period]
+    
+    if len(rate_limit_store[key]) >= max_requests:
+        return False
+    
+    rate_limit_store[key].append(now)
+    return True
 
 # OAuth setup
 oauth = OAuth()
@@ -41,40 +58,64 @@ oauth.register(
     }
 )
 
-# User model
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    name: str
-    picture: Optional[str] = None
+def create_access_token(data: dict) -> str:
+    """Create a short-lived JWT access token with proper claims"""
+    now = datetime.utcnow()
+    expire = now + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode = {
+        **data,
+        "iss": "errandease-api",
+        "aud": "errandease-web",
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+        "jti": str(uuid.uuid4()),
+        "type": "access",
+    }
+    
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
-# Request model for token exchange
-class GoogleTokenRequest(BaseModel):
-    code: str
+def create_refresh_token(user_id: str) -> str:
+    """Create a refresh token and store it in database"""
+    token = secrets.token_urlsafe(64)
+    expires_at = datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    refresh_token = RefreshToken(
+        token=token,
+        user_id=user_id,
+        expires_at=expires_at
+    )
+    
+    refresh_tokens_collection.insert_one(refresh_token.model_dump(by_alias=True, exclude={"id"}))
+    return token
 
-# User info model
-class GoogleUserInfo(BaseModel):
-    email: str
-    name: str
-    picture: Optional[str] = None
-    sub: str
-
-def generate_random_password(length=16):
-    """Generate a random password for Google OAuth users"""
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-    password = ''.join(secrets.choice(alphabet) for _ in range(length))
-    if not any(c.isupper() for c in password):
-        password += 'A'
-    if not any(c.islower() for c in password):
-        password += 'a'
-    if not any(c.isdigit() for c in password):
-        password += '1'
-    return password
+def verify_token(token: str, expected_type: str = "access") -> Optional[dict]:
+    """Verify JWT token with full claims validation"""
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            audience="errandease-web",
+            issuer="errandease-api",
+            options={"require": ["exp", "iat", "nbf", "jti", "type"]}
+        )
+        
+        if payload.get("type") != expected_type:
+            logger.warning(f"Token type mismatch: expected {expected_type}, got {payload.get('type')}")
+            return None
+            
+        return payload
+    except jwt.ExpiredSignatureError:
+        logger.debug("Token expired")
+        return None
+    except jwt.JWTError as e:
+        logger.debug(f"JWT validation error: {e}")
+        return None
 
 async def get_google_tokens(code: str, redirect_uri: str):
     """Exchange authorization code for access token"""
-    print(f"🔄 Exchanging code for tokens with Google...")
-    print(f"📤 Using redirect_uri: {redirect_uri}")
     token_url = "https://oauth2.googleapis.com/token"
     
     data = {
@@ -82,77 +123,81 @@ async def get_google_tokens(code: str, redirect_uri: str):
         "client_secret": settings.GOOGLE_CLIENT_SECRET,
         "code": code,
         "grant_type": "authorization_code",
-        "redirect_uri": redirect_uri,  # This MUST match the one used in auth request
+        "redirect_uri": redirect_uri,
     }
     
     async with httpx.AsyncClient() as client:
         response = await client.post(token_url, data=data)
         
         if response.status_code != 200:
-            print(f"❌ Token exchange failed: {response.status_code} - {response.text}")
+            logger.error(f"Token exchange failed: {response.status_code}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to exchange code for tokens"
             )
         
-        tokens = response.json()
-        print(f"✅ Token exchange successful, access_token received: {bool(tokens.get('access_token'))}")
-        return tokens
+        return response.json()
 
-async def get_google_user_info(access_token: str):
+async def get_google_user_info(access_token: str) -> GoogleUserInfo:
     """Get user info from Google using access token"""
-    print(f"🔄 Getting user info from Google...")
     userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
     
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
+    headers = {"Authorization": f"Bearer {access_token}"}
     
     async with httpx.AsyncClient() as client:
         response = await client.get(userinfo_url, headers=headers)
         
         if response.status_code != 200:
-            print(f"❌ Failed to get user info: {response.status_code} - {response.text}")
+            logger.error(f"Failed to get user info: {response.status_code}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get user info from Google"
             )
         
         user_data = response.json()
-        print(f"✅ User info received: {user_data.get('email')} - {user_data.get('name')}")
-        return user_data
+        
+        if not user_data.get("email_verified"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google account email is not verified"
+            )
+        
+        return GoogleUserInfo(
+            email=user_data.get('email'),
+            name=user_data.get('name'),
+            picture=user_data.get('picture'),
+            sub=user_data.get('sub'),
+            email_verified=user_data.get('email_verified', False)
+        )
 
 @router.get("/google/url")
 async def get_google_auth_url(request: Request, action: Optional[str] = None):
     """Get Google OAuth URL for frontend"""
-    print(f"🔗 Generating Google auth URL for action: {action}")
-    print(f"🎯 Frontend URL from settings: {settings.FRONTEND_URL}")
-    print(f"🌍 Environment: {settings.ENVIRONMENT}")
     
-    # Generate state
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"google_url:{client_ip}", max_requests=10):
+        raise HTTPException(status_code=429, detail="Too many requests")
+    
+    # Generate state and store in a simple cache instead of session
     state = secrets.token_urlsafe(32)
     
-    # Determine redirect URI based on environment
+    # Store state in memory with timestamp (in production, use Redis)
+    rate_limit_store[f"state:{state}"] = {
+        "action": action or "signin",
+        "timestamp": datetime.utcnow().timestamp()
+    }
+    
+    # Determine redirect URI
     if settings.ENVIRONMENT == "production":
-        # Production: no /frontend/ folder
         if action == 'signup':
             redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
         else:
             redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
     else:
-        # Development: with /frontend/ folder
         if action == 'signup':
             redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
         else:
             redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
-    
-    print(f"🔄 Using redirect URI: {redirect_uri}")
-    
-    # Store in session
-    request.session['oauth_state'] = state
-    request.session['oauth_redirect_uri'] = redirect_uri
-    if action:
-        request.session['oauth_action'] = action
     
     # Create OAuth client
     google_client = oauth.create_client('google')
@@ -167,44 +212,53 @@ async def get_google_auth_url(request: Request, action: Optional[str] = None):
     return {"auth_url": auth_url}
 
 @router.post("/google")
-async def google_auth(request: GoogleTokenRequest, fastapi_request: Request):
+async def google_auth(request: GoogleTokenRequest):
     """Handle Google OAuth token exchange - return token in response body"""
     
-    # Add a simple cache to prevent duplicate processing
-    if hasattr(fastapi_request.app.state, 'processed_codes'):
-        if request.code in fastapi_request.app.state.processed_codes:
-            print(f"⚠️ Code already processed, returning cached result")
-            return fastapi_request.app.state.processed_codes[request.code]
-    else:
-        fastapi_request.app.state.processed_codes = {}
+    client_ip = request.client.host if hasattr(request, 'client') else "unknown"
+    if not check_rate_limit(f"google_auth:{client_ip}", max_requests=5):
+        raise HTTPException(status_code=429, detail="Too many requests")
+    
+    if users_collection is None or refresh_tokens_collection is None:
+        logger.error("Database not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection unavailable"
+        )
+    
+    # Validate state from our memory cache
+    state_key = f"state:{request.state}"
+    state_data = rate_limit_store.get(state_key)
+    
+    if not state_data:
+        logger.warning("Invalid or expired OAuth state")
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    
+    # Check state age (5 minutes max)
+    if datetime.utcnow().timestamp() - state_data.get("timestamp", 0) > 300:
+        logger.warning("OAuth state expired")
+        rate_limit_store.pop(state_key, None)
+        raise HTTPException(status_code=400, detail="OAuth state expired")
+    
+    # Remove used state
+    rate_limit_store.pop(state_key, None)
     
     try:
-        print(f"🔍 Starting Google OAuth POST processing...")
+        # Determine redirect URI based on action
+        action = state_data.get("action", "signin")
         
-        # Get redirect URI from session or determine based on environment
-        stored_redirect_uri = fastapi_request.session.get('oauth_redirect_uri')
-        
-        if stored_redirect_uri:
-            redirect_uri = stored_redirect_uri
-            print(f"📤 Using stored redirect_uri from session: {redirect_uri}")
-        else:
-            # Fallback: construct based on environment and action
-            action = fastapi_request.session.get('oauth_action', 'signin')
-            
-            if settings.ENVIRONMENT == "production":
-                if action == 'signup':
-                    redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
-                else:
-                    redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
+        if settings.ENVIRONMENT == "production":
+            if action == 'signup':
+                redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
             else:
-                if action == 'signup':
-                    redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
-                else:
-                    redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
-            
-            print(f"📤 Using constructed redirect_uri: {redirect_uri}")
+                redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
+        else:
+            if action == 'signup':
+                redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
+            else:
+                redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
         
-        # Exchange code for tokens - PASS THE REDIRECT_URI
+        # Exchange code for tokens
         tokens = await get_google_tokens(request.code, redirect_uri)
         access_token = tokens.get("access_token")
         
@@ -215,183 +269,184 @@ async def google_auth(request: GoogleTokenRequest, fastapi_request: Request):
             )
         
         # Get user info from Google
-        user_data = await get_google_user_info(access_token)
+        google_user = await get_google_user_info(access_token)
         
-        # Create GoogleUserInfo object
-        google_user = GoogleUserInfo(
-            email=user_data.get('email'),
-            name=user_data.get('name'),
-            picture=user_data.get('picture'),
-            sub=user_data.get('sub')
-        )
+        # Check if user exists
+        existing_user = users_collection.find_one({
+            "$or": [
+                {"google_id": google_user.sub},
+                {"email": google_user.email}
+            ]
+        })
         
-        # Check if user exists in database
-        existing_user = users_collection.find_one({"email": google_user.email})
+        is_new = False
+        user_id = None
+        username = None
         
         if existing_user:
             # Update existing user
             users_collection.update_one(
-                {"email": google_user.email},
+                {"_id": existing_user["_id"]},
                 {"$set": {
                     "google_id": google_user.sub,
                     "picture": google_user.picture,
-                    "last_login": datetime.utcnow()
+                    "last_login": datetime.utcnow(),
+                    "name": google_user.name
                 }}
             )
             user_id = str(existing_user['_id'])
-            is_new = False
-            print(f"🔄 Updated existing user: {google_user.email}")
+            username = existing_user.get('username')
+            logger.info(f"Updated existing user: {google_user.email}")
         else:
             # Create new user
-            random_password = generate_random_password()
-            
-            # Create username from email
             base_username = google_user.email.split('@')[0]
             username = base_username
-            
-            # Ensure username is unique
             counter = 1
             while users_collection.find_one({"username": username}):
                 username = f"{base_username}{counter}"
                 counter += 1
             
-            new_user = {
-                "email": google_user.email,
-                "name": google_user.name,
-                "username": username,
-                "google_id": google_user.sub,
-                "picture": google_user.picture,
-                "password": random_password,  # You should hash this
-                "role": "customer",  # Default role
-                "created_at": datetime.utcnow(),
-                "last_login": datetime.utcnow()
-            }
-            result = users_collection.insert_one(new_user)
+            new_user = User(
+                email=google_user.email,
+                name=google_user.name,
+                username=username,
+                picture=google_user.picture,
+                auth_identities=[AuthIdentity(provider="google", provider_sub=google_user.sub)],
+                role="customer",
+                last_login=datetime.utcnow()
+            )
+            
+            new_user_dict = new_user.model_dump(by_alias=True, exclude={"id"})
+            new_user_dict = {k: v for k, v in new_user_dict.items() if v is not None}
+            
+            result = users_collection.insert_one(new_user_dict)
             user_id = str(result.inserted_id)
             is_new = True
-            print(f"🆕 Created new user: {google_user.email} with username: {username}")
+            logger.info(f"Created new user: {google_user.email}")
         
-        # Create JWT token
-        jwt_token = create_access_token(
-            data={"sub": user_id, "email": google_user.email, "name": google_user.name}
+        # Create tokens
+        jwt_token = create_access_token({
+            "sub": user_id, 
+            "email": google_user.email, 
+            "name": google_user.name,
+            "role": existing_user.get("role", "customer") if existing_user else "customer"
+        })
+        
+        refresh_token = create_refresh_token(user_id)
+        
+        # Prepare user response
+        user_response = UserResponse(
+            id=user_id,
+            email=google_user.email,
+            name=google_user.name,
+            username=username,
+            picture=google_user.picture,
+            role=existing_user.get("role", "customer") if existing_user else "customer",
+            is_new=is_new
         )
-        print(f"🔑 JWT token created for user: {google_user.email}")
         
-        # Prepare result
-        result = {
+        # Return tokens in response body
+        response_data = {
             "access_token": jwt_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            "user": {
-                "id": user_id,
-                "email": google_user.email,
-                "name": google_user.name,
-                "picture": google_user.picture,
-                "is_new": is_new,
-                "role": "customer"  # Default role
-            }
+            "user": user_response.model_dump()
         }
         
-        # Cache the result
-        fastapi_request.app.state.processed_codes[request.code] = result
-        
-        # Clear session data
-        if 'oauth_state' in fastapi_request.session:
-            del fastapi_request.session['oauth_state']
-        if 'oauth_redirect_uri' in fastapi_request.session:
-            del fastapi_request.session['oauth_redirect_uri']
-        if 'oauth_action' in fastapi_request.session:
-            del fastapi_request.session['oauth_action']
-        
-        return result
+        return JSONResponse(content=response_data)
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Google auth error: {e}")
-        import traceback
-        print(f"❌ Traceback: {traceback.format_exc()}")
+        logger.error(f"Google auth error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication failed"
         )
 
-# Keep your existing JWT functions
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+@router.post("/refresh")
+async def refresh_token(refresh_token: str):
+    """Refresh access token using refresh token"""
     
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    return encoded_jwt
-
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.JWTError:
-        return None
-
-@router.get("/verify")
-async def verify_user(token: str):
-    """Verify JWT token and return user info"""
-    try:
-        payload = verify_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        
-        from bson.objectid import ObjectId
-        user_id = payload.get("sub")
-        
-        try:
-            user = users_collection.find_one({"_id": ObjectId(user_id)})
-        except:
-            user = users_collection.find_one({"email": payload.get("email")})
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        return UserResponse(
-            id=str(user['_id']),
-            email=user['email'],
-            name=user.get('name', ''),
-            picture=user.get('picture')
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Token verification error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@router.get("/logout")
-async def logout():
-    """Logout endpoint"""
-    return JSONResponse({
-        "message": "Logged out successfully",
-        "redirect": settings.FRONTEND_URL
+    if refresh_tokens_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    # Find refresh token in database
+    token_doc = refresh_tokens_collection.find_one({
+        "token": refresh_token,
+        "revoked_at": None,
+        "expires_at": {"$gt": datetime.utcnow()}
     })
-
-# Keep the old endpoints for backward compatibility (optional)
-@router.get("/google/login")
-async def google_login_redirect(request: Request):
-    """Legacy endpoint - redirects to new pattern info"""
-    return JSONResponse({
-        "message": "Please use GET /api/auth/google/url to get the auth URL, then POST /api/auth/google with the code",
-        "new_endpoints": {
-            "get_url": "/api/auth/google/url",
-            "exchange_token": "/api/auth/google (POST)"
-        }
+    
+    if not token_doc:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    
+    # Get user
+    from bson.objectid import ObjectId
+    user = users_collection.find_one({"_id": ObjectId(token_doc["user_id"])})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    # Create new access token
+    new_access_token = create_access_token({
+        "sub": str(user["_id"]),
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"]
     })
+    
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer",
+        "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    }
 
-@router.get("/google/callback")
-async def google_callback_legacy():
-    """Legacy endpoint - returns error with instructions"""
-    return JSONResponse({
-        "error": "This endpoint is not used in the token exchange pattern",
-        "message": "Please use GET /api/auth/google/url to get the auth URL, then POST /api/auth/google with the code"
-    }, status_code=400)
+@router.get("/me")
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current user from Authorization header"""
+    
+    if users_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    token = credentials.credentials
+    payload = verify_token(token)
+    
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    from bson.objectid import ObjectId
+    user_id = payload.get("sub")
+    
+    try:
+        user = users_collection.find_one({"_id": ObjectId(user_id)})
+    except:
+        raise HTTPException(status_code=401, detail="Invalid user ID")
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return UserResponse(
+        id=str(user['_id']),
+        email=user['email'],
+        name=user.get('name', ''),
+        username=user.get('username'),
+        picture=user.get('picture'),
+        role=user.get('role', 'customer'),
+        is_new=False
+    )
+
+@router.post("/logout")
+async def logout(refresh_token: str):
+    """Logout - revoke refresh token"""
+    
+    if refresh_tokens_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    # Revoke refresh token in database
+    refresh_tokens_collection.update_one(
+        {"token": refresh_token},
+        {"$set": {"revoked_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Logged out successfully"}

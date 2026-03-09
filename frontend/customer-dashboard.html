@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes"
     />
     <title>ErrandEase · Customer Dashboard</title>
-    <!-- Tailwind + fonts (exactly as index) -->
+    <!-- Tailwind + fonts -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -17,13 +17,9 @@
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
-    <!-- Primary favicon -->
+    <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="images/favicon.ico" />
-
-    <!-- Modern SVG favicon -->
     <link rel="icon" type="image/svg+xml" href="images/favicon.svg" />
-
-    <!-- Apple Touch Icon -->
     <link
       rel="apple-touch-icon"
       sizes="180x180"
@@ -62,7 +58,6 @@
         background: rgba(255, 255, 255, 0.8);
         backdrop-filter: blur(10px);
       }
-      /* smooth page transitions */
       .page-transition {
         transition: opacity 0.2s ease;
       }
@@ -73,7 +68,6 @@
       .hide-scrollbar::-webkit-scrollbar {
         display: none;
       }
-      /* active nav indicator */
       .nav-active {
         color: #10b981;
         font-weight: 600;
@@ -81,7 +75,6 @@
       .nav-active .material-symbols-outlined {
         font-variation-settings: "FILL" 1;
       }
-      /* micro interactions */
       button,
       a {
         -webkit-tap-highlight-color: rgba(16, 185, 129, 0.2);
@@ -98,7 +91,6 @@
           box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1);
         }
       }
-      /* modal overlay */
       .modal-backdrop {
         background: rgba(0, 0, 0, 0.3);
         backdrop-filter: blur(4px);
@@ -106,9 +98,9 @@
     </style>
   </head>
   <body class="bg-background-light text-slate-900 antialiased">
-    <!-- ========== MAIN LAYOUT: flexible grid (sidebar + content) ========== -->
+    <!-- MAIN LAYOUT -->
     <div class="flex min-h-screen">
-      <!-- SIDEBAR (desktop) – hidden by default on mobile, toggled via hamburger -->
+      <!-- SIDEBAR (desktop) -->
       <aside
         id="desktopSidebar"
         class="fixed md:static inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 shadow-sm transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out md:transition-none flex flex-col"
@@ -124,7 +116,6 @@
               >ErrandEase</span
             >
           </div>
-          <!-- close hamburger (only visible when sidebar is open on tablet) -->
           <button
             id="closeSidebarBtn"
             class="md:hidden text-slate-500 hover:text-primary"
@@ -132,7 +123,6 @@
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
-        <!-- sidebar nav items (identical to bottom nav) -->
         <nav class="flex-1 py-8 px-4 space-y-2">
           <a
             href="#"
@@ -172,22 +162,18 @@
         </div>
       </aside>
 
-      <!-- MAIN CONTENT AREA (right side) -->
+      <!-- MAIN CONTENT -->
       <main class="flex-1 w-full md:w-auto">
-        <!-- Top bar with hamburger (visible on tablet/desktop when sidebar collapsed, always on mobile) -->
+        <!-- Top bar -->
         <div
           class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 h-16 flex items-center md:px-6"
         >
-          <!-- Mobile hamburger - hidden on desktop -->
           <button id="hamburgerBtn" class="md:hidden text-slate-600 p-2 -ml-2">
             <span class="material-symbols-outlined text-2xl">menu</span>
           </button>
-
-          <!-- Desktop toggle button - completely hidden -->
           <button id="desktopToggleBtn" class="hidden">
             <span class="material-symbols-outlined">menu_open</span>
           </button>
-
           <div
             class="flex-1 flex justify-end items-center gap-1 sm:gap-3 min-w-0"
           >
@@ -207,7 +193,7 @@
           </div>
         </div>
 
-        <!-- DYNAMIC PAGE CONTAINER (tabs swap here) -->
+        <!-- Dynamic page container -->
         <div
           id="pageContainer"
           class="p-4 md:p-6 max-w-5xl mx-auto transition-opacity duration-200"
@@ -215,7 +201,7 @@
       </main>
     </div>
 
-    <!-- BOTTOM NAVIGATION (mobile ≤768px) -->
+    <!-- Bottom navigation (mobile) -->
     <nav
       class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-40 md:hidden"
     >
@@ -253,22 +239,17 @@
       </a>
     </nav>
 
-    <!-- MODAL PLACEHOLDER (for ongoing details) -->
+    <!-- Modal -->
     <div
       id="modalOverlay"
       class="fixed inset-0 z-[100] modal-backdrop hidden items-center justify-center p-4"
-      onclick="if (event.target === this) closeModal();"
     >
       <div
         class="bg-white rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto shadow-xl p-6"
-        onclick="event.stopPropagation()"
       >
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-xl font-bold text-secondary">Errand details</h3>
-          <button
-            onclick="closeModal()"
-            class="text-slate-400 hover:text-primary"
-          >
+          <button id="closeModalBtn" class="text-slate-400 hover:text-primary">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -276,384 +257,12 @@
       </div>
     </div>
 
-    <script>
-      (function () {
-        // ---------- MOCK DATA & LOCAL STATE ----------
-        let ongoingErrands = [
-          {
-            id: "e1",
-            title: "Market shopping (Mile 12)",
-            status: "in-progress",
-            cost: 4500,
-            dateRequested: "2026-02-27",
-            description: "5kg rice, tomatoes, pepper",
-            pickup: "Mile 12 market",
-            delivery: "Ikeja",
-            budget: 5000,
-            preferredTime: "10:00 AM",
-          },
-          {
-            id: "e2",
-            title: "Document delivery",
-            status: "in-progress",
-            cost: 3200,
-            dateRequested: "2026-02-26",
-            description: "Envelope to client",
-            pickup: "Marina",
-            delivery: "VI",
-            budget: 4000,
-            preferredTime: "2:00 PM",
-          },
-        ];
-        let historyErrands = [
-          {
-            id: "h1",
-            title: "Pharmacy pickup",
-            status: "completed",
-            cost: 2800,
-            dateCompleted: "2026-02-25",
-            description: "Prescription meds",
-            pickup: "Lekki Pharmacy",
-            delivery: "Home",
-          },
-          {
-            id: "h2",
-            title: "Bank deposit",
-            status: "completed",
-            cost: 3500,
-            dateCompleted: "2026-02-24",
-            description: "Check deposit at Access bank",
-            pickup: "VI",
-            delivery: "Bank",
-          },
-        ];
-
-        // total spent summary for history
-        const totalSpent = historyErrands.reduce((sum, e) => sum + e.cost, 0);
-
-        // ---------- DOM ELEMENTS ----------
-        const pageContainer = document.getElementById("pageContainer");
-        const sidebar = document.getElementById("desktopSidebar");
-        const hamburgerBtn = document.getElementById("hamburgerBtn");
-        const closeSidebarBtn = document.getElementById("closeSidebarBtn");
-        const desktopToggleBtn = document.getElementById("desktopToggleBtn");
-        const bottomNavItems = document.querySelectorAll(".bottom-nav-item");
-        const sidebarLinks = document.querySelectorAll(".sidebar-link");
-        const modalOverlay = document.getElementById("modalOverlay");
-        const modalContent = document.getElementById("modalContent");
-
-        let currentTab = "request"; // default
-
-        // ---------- SIDEBAR / HAMBURGER LOGIC (mobile & collapsible desktop) ----------
-        function closeSidebar() {
-          sidebar.classList.add("-translate-x-full");
-        }
-        function openSidebar() {
-          sidebar.classList.remove("-translate-x-full");
-        }
-        hamburgerBtn.addEventListener("click", openSidebar);
-        closeSidebarBtn.addEventListener("click", closeSidebar);
-        // desktop toggle (collapsible)
-        let sidebarVisible = true; // initial visible on desktop
-        desktopToggleBtn.addEventListener("click", () => {
-          if (sidebarVisible) {
-            sidebar.classList.add("-translate-x-full");
-            desktopToggleBtn.innerHTML =
-              '<span class="material-symbols-outlined">menu</span>';
-          } else {
-            sidebar.classList.remove("-translate-x-full");
-            desktopToggleBtn.innerHTML =
-              '<span class="material-symbols-outlined">menu_open</span>';
-          }
-          sidebarVisible = !sidebarVisible;
-        });
-
-        // close sidebar on mobile after clicking a link
-        const allNavLinks = [...sidebarLinks, ...bottomNavItems];
-        function handleNavClick(e, tabId) {
-          e.preventDefault();
-          if (window.innerWidth < 768) closeSidebar(); // mobile sidebar close
-          setActiveTab(tabId);
-        }
-
-        // set active tab and re-render page
-        function setActiveTab(tabId) {
-          currentTab = tabId;
-          // update bottom nav active styles
-          bottomNavItems.forEach((item) => {
-            const tab = item.getAttribute("data-tab");
-            if (tab === tabId) {
-              item.classList.add("nav-active", "text-primary");
-              item
-                .querySelector(".material-symbols-outlined")
-                ?.classList.add("fill-1");
-            } else {
-              item.classList.remove("nav-active", "text-primary");
-              item
-                .querySelector(".material-symbols-outlined")
-                ?.classList.remove("fill-1");
-            }
-          });
-          // sidebar links active
-          sidebarLinks.forEach((link) => {
-            const tab = link.getAttribute("data-tab");
-            if (tab === tabId) {
-              link.classList.add(
-                "bg-primary/5",
-                "text-primary",
-                "font-semibold",
-              );
-              link.classList.remove("text-slate-600");
-            } else {
-              link.classList.remove(
-                "bg-primary/5",
-                "text-primary",
-                "font-semibold",
-              );
-              link.classList.add("text-slate-600");
-            }
-          });
-          renderPage(tabId);
-        }
-
-        // ---------- PAGE RENDERING ----------
-        function renderPage(tab) {
-          let html = "";
-          if (tab === "request") html = renderRequestTab();
-          else if (tab === "ongoing") html = renderOngoingTab();
-          else if (tab === "history") html = renderHistoryTab();
-          else if (tab === "profile") html = renderProfileTab();
-          pageContainer.innerHTML = html;
-          // attach specific event listeners (request form etc)
-          if (tab === "request") attachRequestEvents();
-          if (tab === "ongoing") attachOngoingEvents();
-        }
-
-        // ---------- REQUEST PAGE ----------
-        function renderRequestTab() {
-          const totalErrands = ongoingErrands.length + historyErrands.length;
-          const activeCount = ongoingErrands.length;
-          return `
-        <div class="space-y-6">
-          <!-- greeting + summary card -->
-          <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold text-secondary">Request an errand</h1>
-            <span class="text-sm text-slate-500 bg-white px-4 py-2 rounded-full shadow-sm">📍 Ikeja</span>
-          </div>
-          <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 flex justify-between items-center">
-            <div><p class="text-slate-500 text-sm">Total errands</p><p class="text-2xl font-bold">${totalErrands}</p></div>
-            <div class="w-px h-10 bg-slate-200"></div>
-            <div><p class="text-slate-500 text-sm">Active now</p><p class="text-2xl font-bold text-primary">${activeCount}</p></div>
-            <div class="w-px h-10 bg-slate-200"></div>
-            <div><p class="text-slate-500 text-sm">Completed</p><p class="text-2xl font-bold">${historyErrands.length}</p></div>
-          </div>
-          <!-- request form card -->
-          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <h2 class="font-bold text-lg mb-4">New errand request</h2>
-            <form id="errandForm" class="space-y-4">
-              <div><label class="text-sm font-medium text-slate-600">Title</label><input type="text" id="title" required class="w-full mt-1 rounded-xl border-slate-200 bg-slate-50 focus:ring-primary focus:border-primary" placeholder="e.g., Market shopping"></div>
-              <div><label class="text-sm font-medium text-slate-600">Description</label><textarea id="desc" rows="2" class="w-full mt-1 rounded-xl border-slate-200 bg-slate-50 focus:ring-primary" placeholder="Items, details..."></textarea></div>
-              <div class="grid grid-cols-2 gap-3"><div><label class="text-sm">Pickup</label><input type="text" id="pickup" class="w-full mt-1 rounded-xl border-slate-200 bg-slate-50" value="Ikeja"></div><div><label class="text-sm">Delivery</label><input type="text" id="delivery" class="w-full mt-1 rounded-xl border-slate-200 bg-slate-50" value="VI"></div></div>
-              <div class="grid grid-cols-2 gap-3"><div><label class="text-sm">Preferred time</label><input type="time" id="time" class="w-full mt-1 rounded-xl border-slate-200 bg-slate-50"></div><div><label class="text-sm">Budget (₦)</label><input type="number" id="budget" value="3000" class="w-full mt-1 rounded-xl border-slate-200 bg-slate-50"></div></div>
-              <div class="bg-slate-50 p-4 rounded-xl flex justify-between items-center"><span class="font-medium">Auto‑calculated cost</span><span class="text-xl font-bold text-primary" id="costPreview">₦3,200</span></div>
-              <button type="submit" class="w-full bg-primary hover:bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all">Request Errand</button>
-            </form>
-          </div>
-        </div>
-      `;
-        }
-
-        function attachRequestEvents() {
-          const budgetInput = document.getElementById("budget");
-          const costSpan = document.getElementById("costPreview");
-          if (budgetInput) {
-            const updateCost = () => {
-              const val = parseInt(budgetInput.value) || 0;
-              const fee = Math.max(200, Math.round(val * 0.1));
-              costSpan.innerText = `₦${(val + fee).toLocaleString()}`;
-            };
-            budgetInput.addEventListener("input", updateCost);
-            updateCost();
-          }
-          document
-            .getElementById("errandForm")
-            ?.addEventListener("submit", (e) => {
-              e.preventDefault();
-              const title = document.getElementById("title").value.trim();
-              if (!title) return;
-              const desc = document.getElementById("desc").value || "—";
-              const pickup = document.getElementById("pickup").value;
-              const delivery = document.getElementById("delivery").value;
-              const time = document.getElementById("time").value || "12:00";
-              const budget =
-                parseInt(document.getElementById("budget").value) || 2000;
-              const cost = budget + Math.max(200, Math.round(budget * 0.1));
-              const newErrand = {
-                id: "e" + Date.now(),
-                title,
-                status: "in-progress",
-                cost,
-                dateRequested: new Date().toISOString().slice(0, 10),
-                description: desc,
-                pickup,
-                delivery,
-                budget,
-                preferredTime: time,
-              };
-              ongoingErrands.push(newErrand);
-              alert("✅ Errand requested! It has been added to Ongoing.");
-              // optionally stay on request, but we can also redirect:
-              setActiveTab("ongoing");
-            });
-        }
-
-        // ---------- ONGOING PAGE ----------
-        function renderOngoingTab() {
-          if (ongoingErrands.length === 0) {
-            return `<div class="h-[70vh] flex flex-col items-center justify-center text-center"><span class="material-symbols-outlined text-6xl text-slate-300">pending_actions</span><p class="text-slate-400 text-lg font-medium mt-4">No ongoing errands yet</p><p class="text-sm text-slate-400">Your active errands will appear here.</p></div>`;
-          }
-          let cards = "";
-          ongoingErrands.forEach((e) => {
-            cards += `
-          <div class="bg-white rounded-xl p-5 border border-slate-100 shadow-sm card-hover" data-id="${e.id}">
-            <div class="flex justify-between items-start"><h3 class="font-bold text-lg">${e.title}</h3><span class="bg-amber-100 text-amber-700 text-xs px-3 py-1 rounded-full font-semibold">In Progress</span></div>
-            <div class="flex gap-4 mt-2 text-sm text-slate-500"><span>💰 ₦${e.cost.toLocaleString()}</span><span>📅 ${e.dateRequested}</span></div>
-            <button class="view-details-btn mt-4 w-full bg-slate-100 hover:bg-primary hover:text-white py-3 rounded-xl font-medium text-sm transition-colors" data-id="${e.id}">View Details</button>
-          </div>
-        `;
-          });
-          return `<div class="space-y-4"><h2 class="text-xl font-bold text-secondary">Ongoing errands (${ongoingErrands.length})</h2>${cards}</div>`;
-        }
-
-        function attachOngoingEvents() {
-          document.querySelectorAll(".view-details-btn").forEach((btn) => {
-            btn.addEventListener("click", (e) => {
-              const id = btn.getAttribute("data-id");
-              const errand = ongoingErrands.find((e) => e.id === id);
-              if (!errand) return;
-              modalContent.innerHTML = `
-            <p><span class="font-semibold">Title:</span> ${errand.title}</p>
-            <p><span class="font-semibold">Description:</span> ${errand.description}</p>
-            <p><span class="font-semibold">Pickup:</span> ${errand.pickup}</p>
-            <p><span class="font-semibold">Delivery:</span> ${errand.delivery}</p>
-            <p><span class="font-semibold">Time:</span> ${errand.preferredTime || "asap"}</p>
-            <p><span class="font-semibold">Budget:</span> ₦${errand.budget}</p>
-            <p><span class="font-semibold">Cost:</span> ₦${errand.cost}</p>
-            <p><span class="font-semibold">Status:</span> <span class="text-amber-600">In Progress</span></p>
-            <button id="fakeCompleteBtn" class="mt-4 w-full bg-primary text-white py-3 rounded-xl font-bold">Mark as completed (demo)</button>
-          `;
-              modalOverlay.classList.remove("hidden");
-              modalOverlay.classList.add("flex");
-              document
-                .getElementById("fakeCompleteBtn")
-                ?.addEventListener("click", () => {
-                  // move from ongoing to history
-                  const index = ongoingErrands.findIndex((x) => x.id === id);
-                  if (index !== -1) {
-                    const completed = {
-                      ...ongoingErrands[index],
-                      status: "completed",
-                      dateCompleted: new Date().toISOString().slice(0, 10),
-                    };
-                    delete completed.preferredTime; // cleanup
-                    historyErrands.push(completed);
-                    ongoingErrands.splice(index, 1);
-                    closeModal();
-                    setActiveTab("ongoing"); // refresh
-                  }
-                });
-            });
-          });
-        }
-
-        // ---------- HISTORY TAB ----------
-        function renderHistoryTab() {
-          if (historyErrands.length === 0) {
-            return `<div class="h-[70vh] flex flex-col items-center justify-center"><span class="material-symbols-outlined text-6xl text-slate-300">history</span><p class="text-slate-400">No completed errands yet.</p></div>`;
-          }
-          let cards = "";
-          historyErrands.forEach((e) => {
-            cards += `
-          <div class="bg-white/70 rounded-xl p-5 border border-slate-100 shadow-sm opacity-80">
-            <div class="flex justify-between"><h3 class="font-bold text-slate-700">${e.title}</h3><span class="bg-emerald-100 text-emerald-700 text-xs px-3 py-1 rounded-full">Completed</span></div>
-            <div class="flex gap-4 mt-2 text-sm text-slate-500"><span>💰 ₦${e.cost}</span><span>✅ ${e.dateCompleted}</span></div>
-          </div>
-        `;
-          });
-          return `
-        <div class="space-y-4">
-          <div class="flex justify-between items-center"><h2 class="text-xl font-bold">Errand history</h2><div class="bg-white px-4 py-2 rounded-full shadow-sm text-primary font-bold">Total spent: ₦${totalSpent.toLocaleString()}</div></div>
-          ${cards}
-        </div>
-      `;
-        }
-
-        // ---------- PROFILE TAB ----------
-        function renderProfileTab() {
-          return `
-        <div class="max-w-2xl mx-auto space-y-6">
-          <div class="bg-white rounded-2xl p-6 shadow-sm">
-            <div class="flex flex-col items-center">
-              <div class="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary text-5xl mb-3"><span class="material-symbols-outlined text-5xl">account_circle</span></div>
-              <h2 class="text-2xl font-bold">Tunde Bakare</h2>
-              <p class="text-slate-500">Customer since 2025</p>
-            </div>
-            <div class="mt-6 space-y-4">
-              <div><label class="text-sm text-slate-500">Full name</label><input type="text" value="Tunde Bakare" class="w-full rounded-xl border-slate-200 bg-slate-50 p-3"></div>
-              <div><label class="text-sm text-slate-500">Email</label><input type="email" value="tunde@errand.ng" class="w-full rounded-xl border-slate-200 bg-slate-50 p-3"></div>
-              <div><label class="text-sm text-slate-500">Phone</label><input type="tel" value="+234 812 345 6789" class="w-full rounded-xl border-slate-200 bg-slate-50 p-3"></div>
-            </div>
-          </div>
-          <div class="bg-white rounded-2xl p-6 shadow-sm">
-            <h3 class="font-bold mb-3">Account info</h3>
-            <p class="text-sm text-slate-600">Email verified · Phone verified</p>
-            <h3 class="font-bold mt-5 mb-2">Saved addresses</h3>
-            <p class="text-sm bg-slate-50 p-3 rounded-xl">🏠 12, Adeola Odeku, VI</p>
-            <p class="text-sm bg-slate-50 p-3 rounded-xl mt-2">🏢 35, Marina, Lagos</p>
-            <button class="mt-6 w-full border border-red-200 text-red-500 hover:bg-red-50 py-3 rounded-xl font-bold transition-colors">Log out (UI only)</button>
-          </div>
-        </div>
-      `;
-        }
-
-        // global close modal
-        window.closeModal = function () {
-          modalOverlay.classList.add("hidden");
-          modalOverlay.classList.remove("flex");
-        };
-
-        // attach nav listeners
-        bottomNavItems.forEach((item) =>
-          item.addEventListener("click", (e) =>
-            handleNavClick(e, item.getAttribute("data-tab")),
-          ),
-        );
-        sidebarLinks.forEach((link) =>
-          link.addEventListener("click", (e) =>
-            handleNavClick(e, link.getAttribute("data-tab")),
-          ),
-        );
-
-        // Make profile icon clickable
-        const profileIconLink = document.getElementById("profile-icon-link");
-        if (profileIconLink) {
-          profileIconLink.addEventListener("click", (e) => {
-            e.preventDefault();
-            setActiveTab("profile");
-
-            // Close sidebar on mobile if open
-            if (window.innerWidth < 768) {
-              closeSidebar();
-            }
-          });
-        }
-
-        // initial active
-        setActiveTab("request");
-      })();
-    </script>
-    <!-- bottom padding for mobile to avoid nav overlap -->
+    <!-- Bottom padding for mobile -->
     <div class="h-16 md:h-0"></div>
-    <script src="js/customer-dashboard.js" defer></script>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/customer-dashboard.js"></script>
   </body>
 </html>
