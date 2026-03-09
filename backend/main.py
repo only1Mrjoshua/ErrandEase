@@ -12,7 +12,7 @@ from config import settings
 from database import client
 import auth
 
-from routers import errands
+from routers import errands, agent_errands
 
 # Configure logging
 logging.basicConfig(
@@ -54,6 +54,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(errands.router)
+app.include_router(agent_errands.router)
 
 @app.get("/")
 async def root():

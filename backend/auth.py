@@ -17,6 +17,7 @@ from models import (
     GoogleTokenRequest, GoogleUserInfo, UserResponse,
     User, AuthIdentity, RefreshToken, TokenResponse
 )
+from schemas.agent import AgentSignupRequest
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 logger = logging.getLogger(__name__)
@@ -172,7 +173,13 @@ async def get_google_user_info(access_token: str) -> GoogleUserInfo:
 
 @router.get("/google/url")
 async def get_google_auth_url(request: Request, action: Optional[str] = None):
-    """Get Google OAuth URL for frontend"""
+    """Get Google OAuth URL for frontend
+    Actions:
+    - signin: customer sign in
+    - signup: customer sign up
+    - agent-signin: agent sign in
+    - agent-signup: agent sign up
+    """
     
     client_ip = request.client.host if request.client else "unknown"
     if not check_rate_limit(f"google_url:{client_ip}", max_requests=10):
@@ -187,17 +194,30 @@ async def get_google_auth_url(request: Request, action: Optional[str] = None):
         "timestamp": datetime.utcnow().timestamp()
     }
     
-    # Determine redirect URI
+    # Determine redirect URI based on action
     if settings.ENVIRONMENT == "production":
-        if action == 'signup':
+        # Production URLs
+        if action == 'agent-signup':
+            redirect_uri = f"{settings.FRONTEND_URL}/agent-signup.html"
+        elif action == 'agent-signin':
+            redirect_uri = f"{settings.FRONTEND_URL}/agent-signin.html"
+        elif action == 'signup':
             redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
-        else:
+        else:  # default to signin
             redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
     else:
-        if action == 'signup':
+        # Development URLs
+        if action == 'agent-signup':
+            redirect_uri = f"{settings.FRONTEND_URL}/frontend/agent-signup.html"
+        elif action == 'agent-signin':
+            redirect_uri = f"{settings.FRONTEND_URL}/frontend/agent-signin.html"
+        elif action == 'signup':
             redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
-        else:
+        else:  # default to signin
             redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
+    
+    # Log the redirect URI for debugging
+    logger.info(f"OAuth request - Action: {action}, Redirect URI: {redirect_uri}")
     
     # Create OAuth client
     google_client = oauth.create_client('google')
@@ -469,3 +489,185 @@ async def logout(refresh_token: str):
     )
     
     return {"message": "Logged out successfully"}
+
+@router.post("/google/agent")
+async def google_agent_auth(
+    payload: GoogleTokenRequest,
+    request: Request,
+    agent_data: Optional[AgentSignupRequest] = None
+):
+    """
+    Google OAuth specifically for agent signup/signin
+    Ensures users signing up as agents get role="agent"
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"google_agent_auth:{client_ip}", max_requests=5):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    if users_collection is None or refresh_tokens_collection is None:
+        logger.error("Database not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection unavailable"
+        )
+
+    # Validate state from our memory cache
+    state_key = f"state:{payload.state}"
+    state_data = rate_limit_store.get(state_key)
+
+    if not state_data:
+        logger.warning("Invalid or expired OAuth state")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state"
+        )
+
+    # Check state age (5 minutes max)
+    if datetime.utcnow().timestamp() - state_data.get("timestamp", 0) > 300:
+        logger.warning("OAuth state expired")
+        rate_limit_store.pop(state_key, None)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OAuth state expired"
+        )
+
+    # Remove used state
+    rate_limit_store.pop(state_key, None)
+
+    try:
+        # Determine redirect URI based on action - CRITICAL FIX
+        action = state_data.get("action", "agent-signin")
+
+        if settings.ENVIRONMENT == "production":
+            if action == "agent-signup":
+                redirect_uri = f"{settings.FRONTEND_URL}/agent-signup.html"
+            else:
+                redirect_uri = f"{settings.FRONTEND_URL}/agent-signin.html"
+        else:
+            if action == "agent-signup":
+                redirect_uri = f"{settings.FRONTEND_URL}/frontend/agent-signup.html"
+            else:
+                redirect_uri = f"{settings.FRONTEND_URL}/frontend/agent-signin.html"
+
+        # Exchange code for Google tokens
+        tokens = await get_google_tokens(payload.code, redirect_uri)
+        google_access_token = tokens.get("access_token")
+
+        if not google_access_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No access token received from Google"
+            )
+
+        # Get user info from Google
+        google_user = await get_google_user_info(google_access_token)
+
+        # Check if user exists
+        existing_user = users_collection.find_one({
+            "$or": [
+                {"google_id": google_user.sub},
+                {"email": google_user.email}
+            ]
+        })
+
+        is_new = False
+        user_id = None
+        username = None
+        role = "agent"  # Force agent role for this endpoint
+
+        if existing_user:
+            # Check if user is already an agent or we're promoting them
+            current_role = existing_user.get("role", "customer")
+            
+            # Security: Only allow role change if explicitly approved
+            # For now, we'll allow users to become agents
+            # In production, this might require admin approval
+            
+            users_collection.update_one(
+                {"_id": existing_user["_id"]},
+                {
+                    "$set": {
+                        "google_id": google_user.sub,
+                        "picture": google_user.picture,
+                        "last_login": datetime.utcnow(),
+                        "name": google_user.name,
+                        "role": "agent"  # Upgrade to agent
+                    }
+                }
+            )
+            user_id = str(existing_user["_id"])
+            username = existing_user.get("username")
+            logger.info(f"Updated existing user to agent: {google_user.email}")
+        else:
+            base_username = google_user.email.split("@")[0]
+            username = base_username
+            counter = 1
+
+            while users_collection.find_one({"username": username}):
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            new_user = User(
+                email=google_user.email,
+                name=google_user.name,
+                username=username,
+                picture=google_user.picture,
+                auth_identities=[
+                    AuthIdentity(
+                        provider="google",
+                        provider_sub=google_user.sub
+                    )
+                ],
+                role="agent",  # New users become agents
+                last_login=datetime.utcnow()
+            )
+
+            new_user_dict = new_user.model_dump(by_alias=True, exclude={"id"})
+            new_user_dict = {
+                k: v for k, v in new_user_dict.items() if v is not None
+            }
+
+            result = users_collection.insert_one(new_user_dict)
+            user_id = str(result.inserted_id)
+            is_new = True
+            logger.info(f"Created new agent: {google_user.email}")
+
+        # Create app tokens
+        jwt_token = create_access_token({
+            "sub": user_id,
+            "email": google_user.email,
+            "name": google_user.name,
+            "role": "agent",  # Ensure role is agent in JWT
+        })
+
+        refresh_token = create_refresh_token(user_id)
+
+        # Prepare user response
+        user_response = UserResponse(
+            id=user_id,
+            email=google_user.email,
+            name=google_user.name,
+            username=username,
+            picture=google_user.picture,
+            role="agent",  # Ensure role is agent in response
+            is_new=is_new
+        )
+
+        response_data = {
+            "access_token": jwt_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            "user": user_response.model_dump()
+        }
+
+        return JSONResponse(content=response_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google agent auth error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed"
+        )

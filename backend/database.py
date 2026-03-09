@@ -55,4 +55,21 @@ try:
 except Exception as e:
     logger.warning(f"Could not create indexes: {e}")
 
+    # NEW: Agent-related indexes
+    errands_collection.create_index("assigned_agent_id")
+    errands_collection.create_index([("assigned_agent_id", 1), ("status", 1)])
+    errands_collection.create_index("accepted_at")
+    errands_collection.create_index("completed_at")
+    
+    # Compound index for available errands query
+    errands_collection.create_index([
+        ("status", 1),
+        ("assigned_agent_id", 1),
+        ("created_at", -1)
+    ])
+    
+    logger.info("📊 Agent indexes created successfully")
+except Exception as e:
+    logger.warning(f"Could not create agent indexes: {e}")
+
 logger.info(f"📊 Using database: {settings.MONGODB_DB_NAME}")

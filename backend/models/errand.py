@@ -1,8 +1,7 @@
-# Add this to your existing models.py after your existing models
 from datetime import datetime
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, field_validator
-from bson import ObjectId  # Add this import
+from bson import ObjectId
 
 # Errand status enum
 ErrandStatus = Literal["pending", "accepted", "in_progress", "completed", "cancelled"]
@@ -18,11 +17,21 @@ class Errand(BaseModel):
     description: str
     pickup: str
     delivery: str
-    preferred_time: Optional[str] = None  # ISO format time
-    budget: int  # User-provided budget in Naira
-    service_fee: int  # Calculated on backend
-    total_cost: int  # Calculated on backend
+    preferred_time: Optional[str] = None
+    budget: int
+    service_fee: int
+    total_cost: int
     status: ErrandStatus
+    
+    # Agent assignment fields - NEW
+    assigned_agent_id: Optional[str] = None  # Agent who accepted this errand
+    assigned_agent_name: Optional[str] = None  # Denormalized for quick display
+    accepted_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_by: Optional[str] = None  # Agent ID who completed it
+    completed_at: Optional[datetime] = None
+    
+    # Original timestamps
     date_requested: Optional[datetime] = None
     date_completed: Optional[datetime] = None
     created_at: datetime
@@ -60,4 +69,4 @@ class Errand(BaseModel):
     
     class Config:
         populate_by_name = True
-        json_encoders = {ObjectId: str}  # Now ObjectId is defined
+        json_encoders = {ObjectId: str}
