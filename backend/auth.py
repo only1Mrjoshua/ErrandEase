@@ -212,65 +212,74 @@ async def get_google_auth_url(request: Request, action: Optional[str] = None):
     return {"auth_url": auth_url}
 
 @router.post("/google")
-async def google_auth(request: GoogleTokenRequest):
-    """Handle Google OAuth token exchange - return token in response body"""
-    
-    client_ip = request.client.host if hasattr(request, 'client') else "unknown"
+async def google_auth(
+    payload: GoogleTokenRequest,
+    request: Request,
+):
+    """Handle Google OAuth token exchange and return app tokens in response body."""
+
+    client_ip = request.client.host if request.client else "unknown"
     if not check_rate_limit(f"google_auth:{client_ip}", max_requests=5):
         raise HTTPException(status_code=429, detail="Too many requests")
-    
+
     if users_collection is None or refresh_tokens_collection is None:
         logger.error("Database not available")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database connection unavailable"
         )
-    
+
     # Validate state from our memory cache
-    state_key = f"state:{request.state}"
+    state_key = f"state:{payload.state}"
     state_data = rate_limit_store.get(state_key)
-    
+
     if not state_data:
         logger.warning("Invalid or expired OAuth state")
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
-    
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state"
+        )
+
     # Check state age (5 minutes max)
     if datetime.utcnow().timestamp() - state_data.get("timestamp", 0) > 300:
         logger.warning("OAuth state expired")
         rate_limit_store.pop(state_key, None)
-        raise HTTPException(status_code=400, detail="OAuth state expired")
-    
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OAuth state expired"
+        )
+
     # Remove used state
     rate_limit_store.pop(state_key, None)
-    
+
     try:
         # Determine redirect URI based on action
         action = state_data.get("action", "signin")
-        
+
         if settings.ENVIRONMENT == "production":
-            if action == 'signup':
+            if action == "signup":
                 redirect_uri = f"{settings.FRONTEND_URL}/sign-up.html"
             else:
                 redirect_uri = f"{settings.FRONTEND_URL}/sign-in.html"
         else:
-            if action == 'signup':
+            if action == "signup":
                 redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-up.html"
             else:
                 redirect_uri = f"{settings.FRONTEND_URL}/frontend/sign-in.html"
-        
-        # Exchange code for tokens
-        tokens = await get_google_tokens(request.code, redirect_uri)
-        access_token = tokens.get("access_token")
-        
-        if not access_token:
+
+        # Exchange code for Google tokens
+        tokens = await get_google_tokens(payload.code, redirect_uri)
+        google_access_token = tokens.get("access_token")
+
+        if not google_access_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No access token received from Google"
             )
-        
+
         # Get user info from Google
-        google_user = await get_google_user_info(access_token)
-        
+        google_user = await get_google_user_info(google_access_token)
+
         # Check if user exists
         existing_user = users_collection.find_one({
             "$or": [
@@ -278,62 +287,73 @@ async def google_auth(request: GoogleTokenRequest):
                 {"email": google_user.email}
             ]
         })
-        
+
         is_new = False
         user_id = None
         username = None
-        
+        role = "customer"
+
         if existing_user:
-            # Update existing user
             users_collection.update_one(
                 {"_id": existing_user["_id"]},
-                {"$set": {
-                    "google_id": google_user.sub,
-                    "picture": google_user.picture,
-                    "last_login": datetime.utcnow(),
-                    "name": google_user.name
-                }}
+                {
+                    "$set": {
+                        "google_id": google_user.sub,
+                        "picture": google_user.picture,
+                        "last_login": datetime.utcnow(),
+                        "name": google_user.name
+                    }
+                }
             )
-            user_id = str(existing_user['_id'])
-            username = existing_user.get('username')
+            user_id = str(existing_user["_id"])
+            username = existing_user.get("username")
+            role = existing_user.get("role", "customer")
             logger.info(f"Updated existing user: {google_user.email}")
         else:
-            # Create new user
-            base_username = google_user.email.split('@')[0]
+            base_username = google_user.email.split("@")[0]
             username = base_username
             counter = 1
+
             while users_collection.find_one({"username": username}):
                 username = f"{base_username}{counter}"
                 counter += 1
-            
+
             new_user = User(
                 email=google_user.email,
                 name=google_user.name,
                 username=username,
                 picture=google_user.picture,
-                auth_identities=[AuthIdentity(provider="google", provider_sub=google_user.sub)],
+                auth_identities=[
+                    AuthIdentity(
+                        provider="google",
+                        provider_sub=google_user.sub
+                    )
+                ],
                 role="customer",
                 last_login=datetime.utcnow()
             )
-            
+
             new_user_dict = new_user.model_dump(by_alias=True, exclude={"id"})
-            new_user_dict = {k: v for k, v in new_user_dict.items() if v is not None}
-            
+            new_user_dict = {
+                k: v for k, v in new_user_dict.items() if v is not None
+            }
+
             result = users_collection.insert_one(new_user_dict)
             user_id = str(result.inserted_id)
             is_new = True
+            role = "customer"
             logger.info(f"Created new user: {google_user.email}")
-        
-        # Create tokens
+
+        # Create app tokens
         jwt_token = create_access_token({
-            "sub": user_id, 
-            "email": google_user.email, 
+            "sub": user_id,
+            "email": google_user.email,
             "name": google_user.name,
-            "role": existing_user.get("role", "customer") if existing_user else "customer"
+            "role": role,
         })
-        
+
         refresh_token = create_refresh_token(user_id)
-        
+
         # Prepare user response
         user_response = UserResponse(
             id=user_id,
@@ -341,11 +361,10 @@ async def google_auth(request: GoogleTokenRequest):
             name=google_user.name,
             username=username,
             picture=google_user.picture,
-            role=existing_user.get("role", "customer") if existing_user else "customer",
+            role=role,
             is_new=is_new
         )
-        
-        # Return tokens in response body
+
         response_data = {
             "access_token": jwt_token,
             "refresh_token": refresh_token,
@@ -353,9 +372,9 @@ async def google_auth(request: GoogleTokenRequest):
             "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "user": user_response.model_dump()
         }
-        
+
         return JSONResponse(content=response_data)
-        
+
     except HTTPException:
         raise
     except Exception as e:
