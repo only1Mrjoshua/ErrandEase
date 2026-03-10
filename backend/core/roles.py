@@ -31,10 +31,36 @@ require_agent = require_role("agent")
 require_customer = require_role("customer")
 require_admin = require_role("admin")
 
-# NEW: Verified agent dependency
-async def require_verified_agent(current_user: dict = Depends(require_agent)):
+# NEW: Check if agent is blocked
+async def require_active_agent(current_user: dict = Depends(require_agent)):
     """
-    Dependency that requires the agent to be verified (approved)
+    Dependency that requires the agent to be active (not blocked)
+    Used for protecting agent endpoints from blocked accounts
+    """
+    # Get agent profile
+    profile = agent_profiles_collection.find_one({"user_id": current_user["id"]})
+    
+    if not profile:
+        logger.warning(f"Agent profile not found for user: {current_user['id']}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent profile not found"
+        )
+    
+    # Check if agent is blocked
+    if profile.get("account_status") == "blocked":
+        blocked_reason = profile.get("blocked_reason", "Suspicious activity detected")
+        logger.warning(f"Blocked agent attempted access: {current_user['id']}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Account blocked: {blocked_reason}. Please contact support."
+        )
+    
+    return current_user
+
+async def require_verified_agent(current_user: dict = Depends(require_active_agent)):
+    """
+    Dependency that requires the agent to be verified (approved) and active
     Used for protecting agent errand endpoints
     """
     # Get agent profile

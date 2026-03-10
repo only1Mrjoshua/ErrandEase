@@ -1,4 +1,4 @@
-// agent-dashboard.js - Complete agent dashboard with real API integration
+// agent-dashboard.js - Complete agent dashboard with real API integration and blocked state
 
 (function() {
     // Guard to prevent double initialization
@@ -424,7 +424,65 @@
 
     // ==================== RENDER FUNCTIONS ====================
 
-    // NEW: Render pending approval state
+    // NEW: Render blocked account state
+    function renderBlockedState(blockedReason) {
+        pageContainer.innerHTML = `
+            <div class="max-w-2xl mx-auto py-12">
+                <div class="bg-white rounded-2xl p-8 shadow-sm border border-red-100 text-center">
+                    <div class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center text-red-500 mx-auto mb-4">
+                        <span class="material-symbols-outlined text-4xl">block</span>
+                    </div>
+                    <h2 class="text-2xl font-bold text-secondary mb-2">Account Blocked</h2>
+                    <p class="text-slate-600 mb-6">
+                        Your account has been blocked due to suspicious activity or a customer report.
+                    </p>
+                    <div class="bg-red-50 rounded-xl p-4 text-left mb-6 border border-red-100">
+                        <p class="text-sm font-medium text-red-700 mb-2">Reason:</p>
+                        <p class="text-sm text-red-600">${escapeHtml(blockedReason || 'Violation of terms of service')}</p>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-4 text-left mb-6">
+                        <p class="text-sm font-medium text-slate-700 mb-2">What can I do?</p>
+                        <ul class="text-sm text-slate-600 space-y-2">
+                            <li class="flex items-start gap-2">
+                                <span class="material-symbols-outlined text-primary text-sm">contact_support</span>
+                                <span>Contact our support team to appeal this decision</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="material-symbols-outlined text-primary text-sm">description</span>
+                                <span>Provide any evidence or clarification</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="material-symbols-outlined text-primary text-sm">schedule</span>
+                                <span>Appeals are typically reviewed within 2-3 business days</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="flex gap-3 justify-center">
+                        <a href="mailto:support@errandease.com?subject=Account%20Appeal&body=Please%20help%20me%20appeal%20my%20blocked%20account.%20My%20user%20ID:%20${currentUser?.id || ''}" 
+                           class="bg-primary hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium transition-colors">
+                            Contact Support
+                        </a>
+                        <button onclick="handleLogout()" class="border border-slate-200 hover:bg-slate-50 px-6 py-3 rounded-xl font-medium transition-colors">
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Hide sidebar navigation
+        const navLinks = document.querySelectorAll('.sidebar-link, .bottom-nav-item');
+        navLinks.forEach(link => {
+            link.style.pointerEvents = 'none';
+            link.style.opacity = '0.5';
+        });
+        
+        // Hide counts
+        if (availableCountEl) availableCountEl.textContent = '0';
+        if (assignedCountEl) assignedCountEl.textContent = '0';
+    }
+
+    // Render pending approval state
     function renderPendingApproval() {
         pageContainer.innerHTML = `
             <div class="max-w-2xl mx-auto py-12">
@@ -530,11 +588,13 @@
         assignedErrands.forEach((e) => {
             const badgeColors = {
                 'accepted': 'bg-blue-100 text-blue-700',
-                'in_progress': 'bg-purple-100 text-purple-700'
+                'in_progress': 'bg-purple-100 text-purple-700',
+                'awaiting_confirmation': 'bg-amber-100 text-amber-700'  // NEW
             };
             const badgeText = {
                 'accepted': 'Pending Start',
-                'in_progress': 'In Progress'
+                'in_progress': 'In Progress',
+                'awaiting_confirmation': 'Awaiting Customer Confirmation'  // NEW
             };
             const badgeColor = badgeColors[e.status] || 'bg-slate-100 text-slate-700';
 
@@ -787,6 +847,7 @@
                 'pending': 'text-amber-600',
                 'accepted': 'text-blue-600',
                 'in_progress': 'text-purple-600',
+                'awaiting_confirmation': 'text-amber-600',  // NEW
                 'completed': 'text-emerald-600',
                 'cancelled': 'text-slate-600'
             };
@@ -803,6 +864,12 @@
                     <button id="modalCompleteBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mt-2">
                         ✅ Mark as Completed
                     </button>
+                `;
+            } else if (errand.status === 'awaiting_confirmation') {
+                actionButtons = `
+                    <p class="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg mt-2">
+                        ⏳ Waiting for customer to confirm completion. You'll be notified once confirmed.
+                    </p>
                 `;
             }
 
@@ -852,10 +919,10 @@
                         showLoading();
                         
                         await completeErrand(errandId);
-                        showSuccess('Errand completed! 🎉');
+                        showSuccess('Errand marked as complete! Waiting for customer confirmation.');
                         
                         await loadAllData();
-                        setActiveTab('completed');
+                        setActiveTab('assigned');
                         
                     } catch (error) {
                         alert(error.message || 'Failed to complete errand');
@@ -1019,12 +1086,22 @@
             return;
         }
         
-        // NEW: Check verification status before loading dashboard
+        // Check verification status and account status before loading dashboard
         try {
             const response = await makeAuthenticatedRequest('/api/agent/verification/status');
             if (response && response.ok) {
                 const status = await response.json();
-                console.log('Verification status:', status);
+                console.log('Account status:', status);
+                
+                // NEW: Check if account is blocked
+                if (status.account_status === 'blocked' || status.is_blocked) {
+                    // Redirect to blocked page
+                    const blockedUrl = window.location.pathname.includes('/frontend/') 
+                        ? '/frontend/agent-blocked.html'
+                        : '/agent-blocked.html';
+                    window.location.href = blockedUrl;
+                    return;
+                }
                 
                 if (status.verification_status === 'not_submitted') {
                     // Redirect to verification page

@@ -219,3 +219,104 @@ async def get_agent_stats(current_user: dict = Depends(require_admin)):
         "rejected": rejected,
         "not_submitted": not_submitted
     }
+
+# Add to admin_agents.py
+
+@router.post("/agents/{agent_id}/unblock")
+async def unblock_agent(
+    agent_id: str,
+    reason: str = Body(..., embed=True),
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Unblock a previously blocked agent
+    Admin only
+    """
+    try:
+        profile = agent_profiles_collection.find_one({"_id": ObjectId(agent_id)})
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid agent ID format"
+        )
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found"
+        )
+    
+    now = datetime.utcnow()
+    result = agent_profiles_collection.update_one(
+        {"_id": ObjectId(agent_id)},
+        {
+            "$set": {
+                "account_status": "active",
+                "updated_at": now
+            },
+            "$unset": {
+                "blocked_reason": "",
+                "blocked_at": "",
+                "blocked_by": ""
+            }
+        }
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unblock agent"
+        )
+    
+    logger.info(f"Admin {current_user['id']} unblocked agent {agent_id}: {reason}")
+    
+    return {"message": "Agent unblocked successfully"}
+
+@router.post("/agents/{agent_id}/appeal")
+async def process_appeal(
+    agent_id: str,
+    decision: str = Body(..., embed=True),  # "approved" or "rejected"
+    notes: str = Body(None, embed=True),
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Process an agent's appeal against blocking
+    Admin only
+    """
+    try:
+        profile = agent_profiles_collection.find_one({"_id": ObjectId(agent_id)})
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid agent ID format"
+        )
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found"
+        )
+    
+    now = datetime.utcnow()
+    update_data = {
+        "appeal_status": decision,
+        "updated_at": now
+    }
+    
+    if decision == "approved":
+        update_data["account_status"] = "active"
+    
+    result = agent_profiles_collection.update_one(
+        {"_id": ObjectId(agent_id)},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process appeal"
+        )
+    
+    logger.info(f"Admin {current_user['id']} processed appeal for agent {agent_id}: {decision}")
+    
+    return {"message": f"Appeal {decision} successfully"}

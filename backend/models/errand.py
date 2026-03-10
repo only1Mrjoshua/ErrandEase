@@ -3,8 +3,8 @@ from typing import Optional, Literal
 from pydantic import BaseModel, Field, field_validator
 from bson import ObjectId
 
-# Errand status enum
-ErrandStatus = Literal["pending", "accepted", "in_progress", "completed", "cancelled"]
+# Errand status enum - ADDED awaiting_confirmation
+ErrandStatus = Literal["pending", "accepted", "in_progress", "awaiting_confirmation", "completed", "cancelled"]
 
 class Errand(BaseModel):
     """
@@ -23,13 +23,18 @@ class Errand(BaseModel):
     total_cost: int
     status: ErrandStatus
     
-    # Agent assignment fields - NEW
-    assigned_agent_id: Optional[str] = None  # Agent who accepted this errand
-    assigned_agent_name: Optional[str] = None  # Denormalized for quick display
+    # Agent assignment fields
+    assigned_agent_id: Optional[str] = None
+    assigned_agent_name: Optional[str] = None
     accepted_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
-    completed_by: Optional[str] = None  # Agent ID who completed it
+    completed_by: Optional[str] = None
     completed_at: Optional[datetime] = None
+    
+    # NEW: Completion verification fields
+    completion_confirmed_at: Optional[datetime] = None
+    completion_rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
     
     # Original timestamps
     date_requested: Optional[datetime] = None

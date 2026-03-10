@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -14,7 +14,7 @@ class ErrandCreate(BaseModel):
     preferred_time: Optional[str] = None
     budget: int = Field(..., ge=1000, le=1000000)
     
-    @field_validator('title', 'description', 'pickup', 'delivery')
+    @validator('title', 'description', 'pickup', 'delivery')
     def strip_strings(cls, v):
         return v.strip() if v else v
 
@@ -31,11 +31,14 @@ class ErrandResponse(BaseModel):
     budget: int
     service_fee: int
     total_cost: int
-    status: str
+    status: str  # Now includes "awaiting_confirmation"
     date_requested: Optional[datetime]
     date_completed: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    
+    # Agent info (for customer view)
+    assigned_agent_name: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -54,3 +57,19 @@ class ErrandListResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# NEW: Completion confirmation schemas
+class CompletionConfirmRequest(BaseModel):
+    """
+    Request to confirm errand completion
+    """
+    confirmed: bool
+    rejection_reason: Optional[str] = None
+
+class CompletionConfirmResponse(BaseModel):
+    """
+    Response after completion confirmation
+    """
+    message: str
+    errand_status: str
+    agent_blocked: bool = False

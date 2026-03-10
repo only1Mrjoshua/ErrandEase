@@ -58,7 +58,11 @@ async def get_verification_status(current_user: dict = Depends(require_agent)):
         "id_verified": profile.get("id_verified", False),
         "rejection_reason": profile.get("verification_rejection_reason"),
         "needs_verification": profile.get("verification_status") in ["not_submitted", "rejected"],
-        "can_access_dashboard": profile.get("verification_status") == "approved"
+        "can_access_dashboard": profile.get("verification_status") == "approved",
+        "account_status": profile.get("account_status", "active"),
+        "is_blocked": profile.get("account_status") == "blocked",
+        "blocked_reason": profile.get("blocked_reason"),
+        "blocked_at": profile.get("blocked_at")
     }
 
 @router.post("/verification/submit")

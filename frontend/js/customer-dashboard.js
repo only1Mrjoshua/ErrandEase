@@ -1,4 +1,4 @@
-// customer-dashboard.js - Production version with real API integration
+// customer-dashboard.js - Production version with real API integration and completion verification
 (function() {
     // Guard to prevent double initialization
     if (window.customerDashboardInitialized) {
@@ -15,6 +15,7 @@
     let ongoingErrands = [];
     let historyErrands = [];
     let isLoading = false;
+    let refreshInterval = null;
 
     // DOM Elements
     const pageContainer = document.getElementById("pageContainer");
@@ -40,6 +41,8 @@
             return null;
         }
 
+        const fullUrl = url.startsWith('http') ? url : `${window.BACKEND_URL}${url}`;
+
         // Set up default headers
         const headers = {
             'Authorization': `Bearer ${token}`,
@@ -48,16 +51,15 @@
         };
 
         try {
-            let response = await fetch(url, { ...options, headers });
+            let response = await fetch(fullUrl, { ...options, headers });
 
             // If token expired, try to refresh
             if (response.status === 401) {
                 console.log('Token expired, attempting refresh...');
                 const newToken = await refreshAccessToken();
                 if (newToken) {
-                    // Retry with new token
                     headers.Authorization = `Bearer ${newToken}`;
-                    response = await fetch(url, { ...options, headers });
+                    response = await fetch(fullUrl, { ...options, headers });
                 } else {
                     redirectToSignIn();
                     return null;
@@ -220,6 +222,49 @@
         }
     }
 
+    // ==================== COMPLETION VERIFICATION API CALLS ====================
+
+    async function fetchPendingConfirmations() {
+        try {
+            const response = await makeAuthenticatedRequest(
+                `${window.BACKEND_URL}/api/customer/errands/pending-confirmation`
+            );
+            
+            if (response && response.ok) {
+                return await response.json();
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching pending confirmations:', error);
+            return [];
+        }
+    }
+
+    async function submitCompletionConfirmation(errandId, confirmed, rejectionReason = null) {
+        try {
+            const response = await makeAuthenticatedRequest(
+                `${window.BACKEND_URL}/api/customer/errands/${errandId}/confirm-completion`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        confirmed: confirmed,
+                        rejection_reason: rejectionReason
+                    })
+                }
+            );
+            
+            if (response && response.ok) {
+                return await response.json();
+            } else if (response) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to process confirmation');
+            }
+        } catch (error) {
+            console.error('Confirmation error:', error);
+            throw error;
+        }
+    }
+
     // ==================== UI UPDATE FUNCTIONS ====================
 
     async function updateGreeting() {
@@ -259,14 +304,14 @@
     }
 
     function hideLoading() {
-      isLoading = false;
+        isLoading = false;
     }
 
     function showError(message) {
         pageContainer.innerHTML = `
             <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
                 <span class="material-symbols-outlined text-4xl text-red-400">error</span>
-                <p class="mt-2 text-red-600">${message}</p>
+                <p class="mt-2 text-red-600">${escapeHtml(message)}</p>
                 <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                     Try Again
                 </button>
@@ -284,6 +329,202 @@
         setTimeout(() => {
             toast.remove();
         }, 3000);
+    }
+
+    // ==================== COMPLETION VERIFICATION UI ====================
+
+    async function checkAndShowPendingConfirmations() {
+        try {
+            console.log('Checking for pending confirmations...');
+            const pending = await fetchPendingConfirmations();
+            console.log('Pending confirmations:', pending);
+            
+            if (pending && pending.length > 0) {
+                // Show banner notification
+                showPendingConfirmationsNotification(pending);
+                
+                // Automatically show the first pending errand modal
+                // But only if not already showing one
+                if (!document.getElementById('completionModal')) {
+                    showCompletionModal(pending[0]);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking pending confirmations:', error);
+        }
+    }
+
+    function showPendingConfirmationsNotification(pendingErrands) {
+        // Remove existing banner if any
+        const existingBanner = document.getElementById('pendingConfirmationsBanner');
+        if (existingBanner) existingBanner.remove();
+
+        const banner = document.createElement('div');
+        banner.id = 'pendingConfirmationsBanner';
+        banner.className = 'bg-amber-50 border-l-4 border-amber-500 p-4 mb-4 rounded-r-lg shadow-md animate-fade-in-down';
+        
+        const content = document.createElement('div');
+        content.className = 'flex items-start justify-between';
+        
+        const textDiv = document.createElement('div');
+        textDiv.className = 'flex-1';
+        
+        const title = document.createElement('h3');
+        title.className = 'text-sm font-medium text-amber-800';
+        title.textContent = `${pendingErrands.length} errand${pendingErrands.length > 1 ? 's' : ''} waiting for your confirmation`;
+        
+        const desc = document.createElement('p');
+        desc.className = 'text-xs text-amber-700 mt-1';
+        desc.textContent = 'Please confirm if these errands have been completed correctly.';
+        
+        textDiv.appendChild(title);
+        textDiv.appendChild(desc);
+        
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'ml-4 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-medium px-3 py-1.5 rounded-full transition-colors';
+        viewBtn.textContent = 'View';
+        viewBtn.onclick = () => {
+            const modal = document.getElementById('completionModal');
+            if (!modal) {
+                showCompletionModal(pendingErrands[0]);
+            }
+        };
+        
+        content.appendChild(textDiv);
+        content.appendChild(viewBtn);
+        banner.appendChild(content);
+        
+        // Insert at top of page container
+        if (pageContainer && pageContainer.firstChild) {
+            pageContainer.insertBefore(banner, pageContainer.firstChild);
+        } else if (pageContainer) {
+            pageContainer.appendChild(banner);
+        }
+    }
+
+    function showCompletionModal(errand) {
+        // Remove any existing modal
+        const existingModal = document.getElementById('completionModal');
+        if (existingModal) existingModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'completionModal';
+        modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+        modal.onclick = (e) => {
+            if (e.target === modal) modal.remove();
+        };
+        
+        modal.innerHTML = `
+            <div class="bg-white rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto shadow-xl p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-secondary">Confirm Completion</h3>
+                    <button onclick="this.closest('#completionModal').remove()" class="text-slate-400 hover:text-primary">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <p class="text-slate-700">
+                        Has <span class="font-semibold">${escapeHtml(errand.assigned_agent_name || 'the agent')}</span> completed this errand?
+                    </p>
+                    
+                    <div class="bg-slate-50 p-4 rounded-xl space-y-2">
+                        <p><span class="font-medium">Errand:</span> ${escapeHtml(errand.title)}</p>
+                        <p><span class="font-medium">Pickup:</span> ${escapeHtml(errand.pickup)}</p>
+                        <p><span class="font-medium">Delivery:</span> ${escapeHtml(errand.delivery)}</p>
+                        <p><span class="font-medium">Amount:</span> <span class="text-primary font-bold">₦${errand.total_cost.toLocaleString()}</span></p>
+                    </div>
+                    
+                    <div class="flex flex-col gap-3">
+                        <button id="confirmYesBtn" class="w-full bg-primary hover:bg-emerald-600 text-white py-3 rounded-xl font-bold">
+                            ✅ Yes, errand is completed
+                        </button>
+                        
+                        <button id="confirmNoBtn" class="w-full border border-red-200 text-red-500 hover:bg-red-50 py-3 rounded-xl font-medium transition-colors">
+                            ❌ No, errand is not completed
+                        </button>
+                    </div>
+                    
+                    <div id="rejectionSection" class="hidden space-y-3 mt-2">
+                        <label class="block text-sm font-medium text-slate-700">
+                            Please explain what's incomplete or wrong:
+                        </label>
+                        <textarea 
+                            id="rejectionReason" 
+                            rows="3"
+                            class="w-full rounded-xl border-slate-200 bg-slate-50 p-3 focus:ring-primary focus:border-primary"
+                            placeholder="e.g., Items missing, wrong delivery location, etc."
+                        ></textarea>
+                        <button id="submitRejectionBtn" class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold">
+                            Submit Report & Block Agent
+                        </button>
+                        <p class="text-xs text-slate-400">
+                            ⚠️ This will block the agent from further actions and flag them for review.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Handle Yes button
+        document.getElementById('confirmYesBtn').addEventListener('click', async () => {
+            await handleCompletionConfirmation(errand.id, true);
+            modal.remove();
+        });
+        
+        // Handle No button - show rejection section
+        document.getElementById('confirmNoBtn').addEventListener('click', () => {
+            document.getElementById('rejectionSection').classList.remove('hidden');
+            document.getElementById('confirmYesBtn').disabled = true;
+            document.getElementById('confirmNoBtn').disabled = true;
+        });
+        
+        // Handle rejection submit
+        document.getElementById('submitRejectionBtn').addEventListener('click', async () => {
+            const reason = document.getElementById('rejectionReason').value.trim();
+            if (!reason) {
+                alert('Please provide a reason');
+                return;
+            }
+            
+            await handleCompletionConfirmation(errand.id, false, reason);
+            modal.remove();
+        });
+    }
+
+    async function handleCompletionConfirmation(errandId, confirmed, rejectionReason = null) {
+        try {
+            showLoading();
+            
+            const result = await submitCompletionConfirmation(errandId, confirmed, rejectionReason);
+            
+            if (confirmed) {
+                showSuccess('Thank you for confirming! The errand is now marked as completed.');
+            } else {
+                showSuccess('Your report has been submitted. The agent has been blocked and our team will investigate.');
+            }
+            
+            // Refresh errands data
+            await loadErrands();
+            
+            // Remove banner if exists
+            const banner = document.getElementById('pendingConfirmationsBanner');
+            if (banner) banner.remove();
+            
+            // Check for more pending confirmations
+            await checkAndShowPendingConfirmations();
+            
+            // Refresh current tab
+            await renderPage(currentTab);
+            
+        } catch (error) {
+            console.error('Confirmation error:', error);
+            showError(error.message || 'Failed to process confirmation');
+        } finally {
+            hideLoading();
+        }
     }
 
     // ==================== RENDER FUNCTIONS ====================
@@ -399,7 +640,7 @@
                     <span class="material-symbols-outlined text-6xl text-slate-300">pending_actions</span>
                     <p class="text-slate-400 text-lg font-medium mt-4">No ongoing errands yet</p>
                     <p class="text-sm text-slate-400">Your active errands will appear here.</p>
-                    <button onclick="document.querySelector('[data-tab=\"request\"]').click()" 
+                    <button onclick="document.querySelector('[data-tab=\\'request\\']').click()" 
                         class="mt-4 px-6 py-2 bg-primary text-white rounded-xl hover:bg-emerald-600">
                         Request an errand
                     </button>
@@ -412,23 +653,31 @@
             const statusColors = {
                 'pending': 'bg-amber-100 text-amber-700',
                 'accepted': 'bg-blue-100 text-blue-700',
-                'in_progress': 'bg-purple-100 text-purple-700'
+                'in_progress': 'bg-purple-100 text-purple-700',
+                'awaiting_confirmation': 'bg-amber-100 text-amber-700 border-2 border-amber-300 animate-pulse'
             };
             
             const statusText = {
                 'pending': 'Pending',
                 'accepted': 'Accepted',
-                'in_progress': 'In Progress'
+                'in_progress': 'In Progress',
+                'awaiting_confirmation': '⚠️ Awaiting Your Confirmation'
             };
             
             const statusClass = statusColors[e.status] || 'bg-slate-100 text-slate-700';
             
+            // Add highlight for awaiting confirmation
+            const awaitingHighlight = e.status === 'awaiting_confirmation' ? 'ring-2 ring-amber-300 ring-opacity-50 bg-amber-50/30' : '';
+            
             cards += `
-                <div class="bg-white rounded-xl p-5 border border-slate-100 shadow-sm card-hover" data-id="${e.id}">
+                <div class="bg-white rounded-xl p-5 border border-slate-100 shadow-sm card-hover ${awaitingHighlight}" data-id="${e.id}">
                     <div class="flex justify-between items-start">
                         <h3 class="font-bold text-lg">${escapeHtml(e.title)}</h3>
                         <span class="${statusClass} text-xs px-3 py-1 rounded-full font-semibold">${statusText[e.status] || e.status}</span>
                     </div>
+                    <p class="text-sm text-slate-500 mt-1">
+                        👤 ${escapeHtml(e.assigned_agent_name || 'Unassigned')}
+                    </p>
                     <div class="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
                         <span>💰 ₦${e.total_cost.toLocaleString()}</span>
                         <span>📍 ${escapeHtml(e.pickup)} → ${escapeHtml(e.delivery)}</span>
@@ -444,6 +693,13 @@
                                     data-id="${e.id}"
                                     title="Cancel errand">
                                 <span class="material-symbols-outlined text-xl">close</span>
+                            </button>
+                        ` : ''}
+                        ${e.status === 'awaiting_confirmation' ? `
+                            <button class="confirm-errand-btn px-4 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-xl transition-colors font-medium text-sm"
+                                    data-id="${e.id}"
+                                    title="Confirm completion">
+                                Confirm
                             </button>
                         ` : ''}
                     </div>
@@ -484,6 +740,9 @@
                             ${e.status === 'completed' ? 'Completed' : 'Cancelled'}
                         </span>
                     </div>
+                    <p class="text-sm text-slate-500 mt-1">
+                        👤 ${escapeHtml(e.assigned_agent_name || 'N/A')}
+                    </p>
                     <div class="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
                         <span>💰 ₦${e.total_cost.toLocaleString()}</span>
                         <span>📍 ${escapeHtml(e.pickup)} → ${escapeHtml(e.delivery)}</span>
@@ -650,9 +909,14 @@
             'pending': 'text-amber-600',
             'accepted': 'text-blue-600',
             'in_progress': 'text-purple-600',
+            'awaiting_confirmation': 'text-amber-600 font-bold',
             'completed': 'text-emerald-600',
             'cancelled': 'text-slate-600'
         };
+        
+        const statusText = errand.status === 'awaiting_confirmation' 
+            ? 'Awaiting Your Confirmation - Please verify if this errand is completed'
+            : errand.status;
         
         modalContent.innerHTML = `
             <div class="space-y-3">
@@ -664,14 +928,35 @@
                 <p><span class="font-semibold">Budget:</span> ₦${errand.budget.toLocaleString()}</p>
                 <p><span class="font-semibold">Service fee:</span> ₦${errand.service_fee.toLocaleString()}</p>
                 <p><span class="font-semibold">Total cost:</span> ₦${errand.total_cost.toLocaleString()}</p>
-                <p><span class="font-semibold">Status:</span> <span class="${statusColors[errand.status]}">${errand.status}</span></p>
+                <p><span class="font-semibold">Status:</span> <span class="${statusColors[errand.status]}">${statusText}</span></p>
                 <p><span class="font-semibold">Requested:</span> ${new Date(errand.date_requested).toLocaleString()}</p>
                 ${errand.date_completed ? `<p><span class="font-semibold">Completed:</span> ${new Date(errand.date_completed).toLocaleString()}</p>` : ''}
+                ${errand.assigned_agent_name ? `<p><span class="font-semibold">Assigned Agent:</span> ${escapeHtml(errand.assigned_agent_name)}</p>` : ''}
+                ${errand.status === 'awaiting_confirmation' ? `
+                    <div class="mt-4 flex gap-2">
+                        <button id="modalConfirmYesBtn" class="flex-1 bg-primary hover:bg-emerald-600 text-white py-2 rounded-lg font-medium">✅ Yes, Completed</button>
+                        <button id="modalConfirmNoBtn" class="flex-1 border border-red-200 text-red-500 hover:bg-red-50 py-2 rounded-lg font-medium">❌ No, Report Issue</button>
+                    </div>
+                ` : ''}
             </div>
         `;
         
         modalOverlay.classList.remove("hidden");
         modalOverlay.classList.add("flex");
+        
+        // Handle modal confirmation buttons
+        if (errand.status === 'awaiting_confirmation') {
+            document.getElementById('modalConfirmYesBtn')?.addEventListener('click', async () => {
+                closeModal();
+                await handleCompletionConfirmation(errand.id, true);
+            });
+            
+            document.getElementById('modalConfirmNoBtn')?.addEventListener('click', async () => {
+                closeModal();
+                // Show full confirmation modal
+                showCompletionModal(errand);
+            });
+        }
     }
 
     async function handleCancelErrand(errandId) {
@@ -686,7 +971,7 @@
             
             // Refresh current tab
             if (currentTab === 'ongoing') {
-                renderPage('ongoing');
+                await renderPage('ongoing');
                 attachOngoingEvents();
             }
         } catch (error) {
@@ -705,6 +990,12 @@
             
             ongoingErrands = ongoing;
             historyErrands = history;
+            
+            // Log for debugging
+            const awaitingConfirmation = ongoing.filter(e => e.status === 'awaiting_confirmation');
+            if (awaitingConfirmation.length > 0) {
+                console.log('Found errands awaiting confirmation:', awaitingConfirmation);
+            }
         } catch (error) {
             console.error('Error loading errands:', error);
             showError('Failed to load errands. Please refresh the page.');
@@ -765,6 +1056,17 @@
                 handleCancelErrand(id);
             });
         });
+        
+        document.querySelectorAll(".confirm-errand-btn").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const id = btn.getAttribute("data-id");
+                const errand = ongoingErrands.find(e => e.id === id);
+                if (errand) {
+                    showCompletionModal(errand);
+                }
+            });
+        });
     }
 
     function attachHistoryEvents() {
@@ -823,6 +1125,11 @@
         });
         
         await renderPage(tabId);
+        
+        // Check for pending confirmations when switching to ongoing tab
+        if (tabId === 'ongoing') {
+            await checkAndShowPendingConfirmations();
+        }
     }
 
     // ==================== MODAL FUNCTIONS ====================
@@ -1075,9 +1382,29 @@
 
         injectLogoutButtonIntoSidebar();
 
+        // Load errands first
+        await loadErrands();
+        
+        // CRITICAL: Check for pending confirmations immediately and show modal
+        await checkAndShowPendingConfirmations();
+
         // Initial tab
         await setActiveTab("request");
+        
+        // Set up periodic check for pending confirmations (every 15 seconds)
+        refreshInterval = setInterval(async () => {
+            if (currentTab === 'ongoing' || currentTab === 'request') {
+                await checkAndShowPendingConfirmations();
+            }
+        }, 15000);
     }
+
+    // Clean up interval on page unload
+    window.addEventListener('beforeunload', () => {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+    });
 
     // Start everything
     if (document.readyState === 'loading') {

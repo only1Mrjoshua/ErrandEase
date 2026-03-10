@@ -12,7 +12,7 @@ from config import settings
 from database import client
 import auth
 
-from routers import errands, agent_errands, agent_verification, admin_agents
+from routers import errands, agent_errands, agent_verification, admin_agents, customer_completion
 
 # Configure logging
 logging.basicConfig(
@@ -57,6 +57,7 @@ app.include_router(errands.router)
 app.include_router(agent_errands.router)
 app.include_router(agent_verification.router)
 app.include_router(admin_agents.router)
+app.include_router(customer_completion.router)  # NEW
 
 @app.get("/")
 async def root():
@@ -69,9 +70,6 @@ async def health_check():
         "database": "connected" if client else "disconnected",
         "environment": settings.ENVIRONMENT
     }
-
-# REMOVED: Local upload directory mounting
-# We no longer need this since files are stored in Cloudinary
 
 # Static files
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

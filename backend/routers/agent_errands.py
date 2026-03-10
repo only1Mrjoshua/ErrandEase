@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 import logging
 
-from database import errands_collection, users_collection
-from core.roles import require_verified_agent  # CHANGED: Now using verified agent guard
+from database import errands_collection, users_collection, agent_profiles_collection
+from core.roles import require_verified_agent, require_active_agent
 from models.errand import Errand
 from schemas.agent import (
     AgentErrandResponse, AvailableErrandResponse, AssignedErrandResponse,
-    AgentAcceptResponse, AgentEarningsResponse
+    AgentAcceptResponse, AgentEarningsResponse,
 )
 
 router = APIRouter(prefix="/api/agent/errands", tags=["agent errands"])
@@ -49,14 +49,15 @@ def validate_status_transition(current_status: str, new_status: str, role: str) 
     """
     # Allowed transitions for agents
     agent_transitions = {
-        "pending": ["accepted"],  # Agent can accept pending errands
-        "accepted": ["in_progress", "cancelled"],  # Agent can start or cancel (if allowed)
-        "in_progress": ["completed"],  # Agent can complete
+        "pending": ["accepted"],
+        "accepted": ["in_progress", "cancelled"],
+        "in_progress": ["awaiting_confirmation"],  # CHANGED: Now goes to awaiting_confirmation
     }
     
     # Allowed transitions for customers
     customer_transitions = {
-        "pending": ["cancelled"],  # Customer can cancel pending errands
+        "pending": ["cancelled"],
+        "awaiting_confirmation": ["completed", "in_progress"],  # NEW: Customer can confirm or reject
     }
     
     if role == "agent":
@@ -67,11 +68,10 @@ def validate_status_transition(current_status: str, new_status: str, role: str) 
     return False
 
 # ==================== ROUTES ====================
-# ALL ROUTES NOW REQUIRE VERIFIED AGENT - Unverified agents cannot access any errand functionality
 
 @router.get("/available", response_model=List[AvailableErrandResponse])
 async def get_available_errands(
-    current_user: dict = Depends(require_verified_agent),  # CHANGED
+    current_user: dict = Depends(require_verified_agent),
     limit: int = Query(50, ge=1, le=100)
 ):
     """
@@ -87,11 +87,10 @@ async def get_available_errands(
     # Query for pending errands with no assigned agent
     query = {
         "status": "pending",
-        "assigned_agent_id": None  # Not assigned to any agent
+        "assigned_agent_id": None
     }
     
     try:
-        # Sort by newest first
         cursor = errands_collection.find(query).sort([
             ("created_at", -1)
         ]).limit(limit)
@@ -121,7 +120,7 @@ async def get_available_errands(
 
 @router.get("/assigned", response_model=List[AssignedErrandResponse])
 async def get_assigned_errands(
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_active_agent)  # CHANGED: Now uses require_active_agent
 ):
     """
     Get errands assigned to the current agent
@@ -134,9 +133,10 @@ async def get_assigned_errands(
         )
     
     # Query for errands assigned to this agent and not completed/cancelled
+    # Include awaiting_confirmation so agents can see they're waiting for customer
     query = {
         "assigned_agent_id": current_user["id"],
-        "status": {"$in": ["accepted", "in_progress"]}
+        "status": {"$in": ["accepted", "in_progress", "awaiting_confirmation"]}
     }
     
     try:
@@ -168,11 +168,11 @@ async def get_assigned_errands(
 
 @router.get("/completed", response_model=List[AssignedErrandResponse])
 async def get_completed_errands(
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_active_agent)
 ):
     """
     Get errands completed by the current agent
-    Security: Only the verified assigned agent can see their completed errands
+    Security: Only the assigned agent can see their completed errands
     """
     if errands_collection is None:
         raise HTTPException(
@@ -216,7 +216,7 @@ async def get_completed_errands(
 @router.get("/{errand_id}", response_model=AgentErrandResponse)
 async def get_agent_errand_detail(
     errand_id: str,
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_active_agent)
 ):
     """
     Get detailed information for a specific errand (agent view)
@@ -295,7 +295,7 @@ async def get_agent_errand_detail(
 @router.post("/{errand_id}/accept", response_model=AgentAcceptResponse)
 async def accept_errand(
     errand_id: str,
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_verified_agent)
 ):
     """
     Accept an available errand
@@ -385,7 +385,7 @@ async def accept_errand(
 @router.post("/{errand_id}/start", response_model=AgentErrandResponse)
 async def start_errand(
     errand_id: str,
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_verified_agent)
 ):
     """
     Start an accepted errand (move to in_progress)
@@ -463,14 +463,16 @@ async def start_errand(
         "customer_phone": None
     }
 
+# CHANGED: Complete endpoint now moves to awaiting_confirmation
 @router.post("/{errand_id}/complete", response_model=AgentErrandResponse)
 async def complete_errand(
     errand_id: str,
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_verified_agent)
 ):
     """
-    Complete an in-progress errand
-    Security: Only the verified assigned agent can complete
+    Mark an in-progress errand as awaiting confirmation
+    Security: Only the verified assigned agent can mark as complete
+    Customer must confirm before it's truly completed
     """
     if errands_collection is None:
         raise HTTPException(
@@ -496,10 +498,7 @@ async def complete_errand(
         },
         {
             "$set": {
-                "status": "completed",
-                "completed_at": now,
-                "date_completed": now,
-                "completed_by": current_user["id"],
+                "status": "awaiting_confirmation",  # CHANGED: Now goes to awaiting_confirmation
                 "updated_at": now
             }
         }
@@ -517,7 +516,7 @@ async def complete_errand(
             elif existing["status"] != "in_progress":
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cannot complete errand with status: {existing['status']}"
+                    detail=f"Cannot mark as complete errand with status: {existing['status']}"
                 )
         
         raise HTTPException(
@@ -528,7 +527,7 @@ async def complete_errand(
     if result.modified_count == 0:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to complete errand"
+            detail="Failed to mark errand as complete"
         )
     
     # Get updated errand
@@ -536,7 +535,7 @@ async def complete_errand(
     customer_name = await get_customer_name(updated_errand["user_id"])
     
     logger.info(
-        f"Verified agent {current_user['id']} completed errand {errand_id}"
+        f"Verified agent {current_user['id']} marked errand {errand_id} as awaiting confirmation"
     )
     
     updated_errand["id"] = str(updated_errand.pop("_id"))
@@ -548,11 +547,11 @@ async def complete_errand(
 
 @router.get("/earnings/summary", response_model=AgentEarningsResponse)
 async def get_earnings_summary(
-    current_user: dict = Depends(require_verified_agent)  # CHANGED
+    current_user: dict = Depends(require_active_agent)
 ):
     """
     Get earnings summary for the current agent
-    Security: Only verified agents can see their own earnings
+    Security: Only active agents can see their own earnings
     """
     if errands_collection is None:
         raise HTTPException(
@@ -569,7 +568,7 @@ async def get_earnings_summary(
     # Get in-progress/accepted errands (pending earnings)
     pending = list(errands_collection.find({
         "assigned_agent_id": current_user["id"],
-        "status": {"$in": ["accepted", "in_progress"]}
+        "status": {"$in": ["accepted", "in_progress", "awaiting_confirmation"]}
     }))
     
     # Calculate totals

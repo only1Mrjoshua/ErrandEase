@@ -32,9 +32,12 @@ class AgentProfileResponse(BaseModel):
     pending_earnings: int
     completed_errands_count: int
     rating: float
+    account_status: str
+    blocked_reason: Optional[str] = None
+    appeal_status: Optional[str] = None
     verification_status: str
     passport_photo_url: Optional[str] = None
-    nin_number: Optional[str] = None  # Only included if agent viewing own profile
+    nin_number: Optional[str] = None
     nin_card_image_url: Optional[str] = None
     proof_of_address_url: Optional[str] = None
     verification_submitted_at: Optional[datetime] = None
@@ -55,6 +58,9 @@ class AgentVerificationStatusResponse(BaseModel):
     rejection_reason: Optional[str] = None
     needs_verification: bool
     can_access_dashboard: bool
+    account_status: str
+    is_blocked: bool
+    blocked_reason: Optional[str] = None
 
 class AgentVerificationSubmitRequest(BaseModel):
     """
