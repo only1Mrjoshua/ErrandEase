@@ -424,6 +424,47 @@
 
     // ==================== RENDER FUNCTIONS ====================
 
+    // NEW: Render pending approval state
+    function renderPendingApproval() {
+        pageContainer.innerHTML = `
+            <div class="max-w-2xl mx-auto py-12">
+                <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 text-center">
+                    <div class="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center text-amber-500 mx-auto mb-4">
+                        <span class="material-symbols-outlined text-4xl">hourglass_top</span>
+                    </div>
+                    <h2 class="text-2xl font-bold text-secondary mb-2">Verification Pending</h2>
+                    <p class="text-slate-600 mb-6">
+                        Your verification documents are being reviewed by our team. This usually takes 1-2 business days.
+                    </p>
+                    <div class="bg-slate-50 rounded-xl p-4 text-left mb-6">
+                        <p class="text-sm font-medium text-slate-700 mb-2">What happens next?</p>
+                        <ul class="text-sm text-slate-600 space-y-2">
+                            <li class="flex items-start gap-2">
+                                <span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+                                <span>Our team reviews your submitted documents</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+                                <span>You'll receive a notification once approved</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+                                <span>You can then start accepting errands</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <p class="text-xs text-slate-400">
+                        Need help? <a href="#" class="text-primary hover:underline">Contact support</a>
+                    </p>
+                </div>
+            </div>
+        `;
+        
+        // Hide sidebar counts since no real data
+        if (availableCountEl) availableCountEl.textContent = '0';
+        if (assignedCountEl) assignedCountEl.textContent = '0';
+    }
+
     function renderAvailableTab() {
         if (availableErrands.length === 0) {
             return `
@@ -978,7 +1019,77 @@
             return;
         }
         
-        // Set up event listeners
+        // NEW: Check verification status before loading dashboard
+        try {
+            const response = await makeAuthenticatedRequest('/api/agent/verification/status');
+            if (response && response.ok) {
+                const status = await response.json();
+                console.log('Verification status:', status);
+                
+                if (status.verification_status === 'not_submitted') {
+                    // Redirect to verification page
+                    const verificationUrl = window.location.pathname.includes('/frontend/') 
+                        ? '/frontend/agent-verification.html'
+                        : '/agent-verification.html';
+                    window.location.href = verificationUrl;
+                    return;
+                } else if (status.verification_status === 'pending') {
+                    // Render pending state instead of dashboard
+                    renderPendingApproval();
+                    
+                    // Set up minimal UI elements
+                    hamburgerBtn?.addEventListener("click", openSidebar);
+                    closeSidebarBtn?.addEventListener("click", closeSidebar);
+                    
+                    // Nav listeners (they won't do much but need to exist)
+                    bottomNavItems.forEach((item) =>
+                        item.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            // Stay on pending view
+                        })
+                    );
+                    
+                    sidebarLinks.forEach((link) =>
+                        link.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            // Stay on pending view
+                        })
+                    );
+                    
+                    // Logout button delegation
+                    document.addEventListener('click', (e) => {
+                        if (e.target.id === 'logoutBtn') {
+                            e.preventDefault();
+                            handleLogout();
+                        }
+                    });
+                    
+                    return;
+                } else if (status.verification_status === 'rejected') {
+                    // Show rejection message and redirect
+                    alert('Your verification was rejected: ' + (status.rejection_reason || 'Please resubmit your documents'));
+                    const verificationUrl = window.location.pathname.includes('/frontend/') 
+                        ? '/frontend/agent-verification.html'
+                        : '/agent-verification.html';
+                    window.location.href = verificationUrl;
+                    return;
+                }
+                // If approved, continue with normal dashboard
+            } else {
+                // If can't get status, assume not verified
+                const verificationUrl = window.location.pathname.includes('/frontend/') 
+                    ? '/frontend/agent-verification.html'
+                    : '/agent-verification.html';
+                window.location.href = verificationUrl;
+                return;
+            }
+        } catch (error) {
+            console.error('Error checking verification status:', error);
+            showError('Failed to load verification status');
+            return;
+        }
+        
+        // Set up event listeners for approved agents
         hamburgerBtn?.addEventListener("click", openSidebar);
         closeSidebarBtn?.addEventListener("click", closeSidebar);
         

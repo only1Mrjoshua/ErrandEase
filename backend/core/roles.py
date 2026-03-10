@@ -1,9 +1,10 @@
 from fastapi import Depends, HTTPException, status
 from functools import wraps
-from typing import Callable
+from typing import Callable, Optional
 import logging
 
 from core.security import get_current_user
+from database import agent_profiles_collection
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,35 @@ def require_role(required_role: str):
         return current_user
     return role_dependency
 
-# Specific role dependencies for convenience
+# Specific role dependencies
 require_agent = require_role("agent")
 require_customer = require_role("customer")
 require_admin = require_role("admin")
+
+# NEW: Verified agent dependency
+async def require_verified_agent(current_user: dict = Depends(require_agent)):
+    """
+    Dependency that requires the agent to be verified (approved)
+    Used for protecting agent errand endpoints
+    """
+    # Get agent profile
+    profile = agent_profiles_collection.find_one({"user_id": current_user["id"]})
+    
+    if not profile:
+        logger.warning(f"Agent profile not found for user: {current_user['id']}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent profile not found. Please complete verification."
+        )
+    
+    if profile.get("verification_status") != "approved":
+        logger.warning(f"Unverified agent attempted access: {current_user['id']}, status: {profile.get('verification_status')}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is not yet verified. Please wait for admin approval."
+        )
+    
+    return current_user
 
 def require_self_or_admin(resource_user_id: str):
     """

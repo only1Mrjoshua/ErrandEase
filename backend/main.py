@@ -12,7 +12,7 @@ from config import settings
 from database import client
 import auth
 
-from routers import errands, agent_errands
+from routers import errands, agent_errands, agent_verification, admin_agents
 
 # Configure logging
 logging.basicConfig(
@@ -55,6 +55,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(errands.router)
 app.include_router(agent_errands.router)
+app.include_router(agent_verification.router)  # NEW
+app.include_router(admin_agents.router)  # NEW
 
 @app.get("/")
 async def root():
@@ -67,6 +69,14 @@ async def health_check():
         "database": "connected" if client else "disconnected",
         "environment": settings.ENVIRONMENT
     }
+
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+AGENT_VERIFICATION_DIR = os.path.join(UPLOAD_DIR, "agent_verification")
+os.makedirs(AGENT_VERIFICATION_DIR, exist_ok=True)
+
+# Mount uploads directory for serving files
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Static files
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

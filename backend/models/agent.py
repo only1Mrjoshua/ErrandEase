@@ -1,7 +1,10 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
 from bson import ObjectId
+
+# Verification status enum
+VerificationStatus = Literal["not_submitted", "pending", "approved", "rejected"]
 
 class AgentProfile(BaseModel):
     """
@@ -22,6 +25,18 @@ class AgentProfile(BaseModel):
     completed_errands_count: int = 0
     rating: float = 0.0
     is_active: bool = True
+    
+    # Verification fields - NEW
+    verification_status: VerificationStatus = "not_submitted"
+    passport_photo_url: Optional[str] = None
+    nin_number: Optional[str] = None
+    nin_card_image_url: Optional[str] = None
+    proof_of_address_url: Optional[str] = None
+    verification_submitted_at: Optional[datetime] = None
+    verification_reviewed_at: Optional[datetime] = None
+    verification_reviewed_by: Optional[str] = None
+    verification_rejection_reason: Optional[str] = None
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

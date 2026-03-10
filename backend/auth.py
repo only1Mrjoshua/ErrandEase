@@ -170,6 +170,29 @@ async def get_google_user_info(access_token: str) -> GoogleUserInfo:
             sub=user_data.get('sub'),
             email_verified=user_data.get('email_verified', False)
         )
+    
+async def ensure_agent_profile(user_id: str, business_name: Optional[str] = None) -> dict:
+    """
+    Ensure agent profile exists for user, create if missing
+    Returns the agent profile
+    """
+    from database import agent_profiles_collection
+    from models.agent import AgentProfile
+    
+    profile = agent_profiles_collection.find_one({"user_id": user_id})
+    
+    if not profile:
+        new_profile = AgentProfile(
+            user_id=user_id,
+            business_name=business_name,
+            verification_status="not_submitted"
+        )
+        profile_dict = new_profile.model_dump(by_alias=True, exclude={"id"})
+        result = agent_profiles_collection.insert_one(profile_dict)
+        profile = agent_profiles_collection.find_one({"_id": result.inserted_id})
+        logger.info(f"Created agent profile for user: {user_id}")
+    
+    return profile
 
 @router.get("/google/url")
 async def get_google_auth_url(request: Request, action: Optional[str] = None):
@@ -573,16 +596,9 @@ async def google_agent_auth(
         is_new = False
         user_id = None
         username = None
-        role = "agent"  # Force agent role for this endpoint
+        role = "agent"
 
         if existing_user:
-            # Check if user is already an agent or we're promoting them
-            current_role = existing_user.get("role", "customer")
-            
-            # Security: Only allow role change if explicitly approved
-            # For now, we'll allow users to become agents
-            # In production, this might require admin approval
-            
             users_collection.update_one(
                 {"_id": existing_user["_id"]},
                 {
@@ -591,7 +607,7 @@ async def google_agent_auth(
                         "picture": google_user.picture,
                         "last_login": datetime.utcnow(),
                         "name": google_user.name,
-                        "role": "agent"  # Upgrade to agent
+                        "role": "agent"
                     }
                 }
             )
@@ -618,7 +634,7 @@ async def google_agent_auth(
                         provider_sub=google_user.sub
                     )
                 ],
-                role="agent",  # New users become agents
+                role="agent",
                 last_login=datetime.utcnow()
             )
 
@@ -632,12 +648,16 @@ async def google_agent_auth(
             is_new = True
             logger.info(f"Created new agent: {google_user.email}")
 
+        # NEW: Ensure agent profile exists
+        business_name = agent_data.business_name if agent_data else None
+        await ensure_agent_profile(user_id, business_name)
+
         # Create app tokens
         jwt_token = create_access_token({
             "sub": user_id,
             "email": google_user.email,
             "name": google_user.name,
-            "role": "agent",  # Ensure role is agent in JWT
+            "role": "agent",
         })
 
         refresh_token = create_refresh_token(user_id)
@@ -649,7 +669,7 @@ async def google_agent_auth(
             name=google_user.name,
             username=username,
             picture=google_user.picture,
-            role="agent",  # Ensure role is agent in response
+            role="agent",
             is_new=is_new
         )
 

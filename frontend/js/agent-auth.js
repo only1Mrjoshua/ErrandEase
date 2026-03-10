@@ -186,6 +186,29 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
 
+        // Get agent verification status
+        getVerificationStatus: async function() {
+            try {
+                const response = await this.authenticatedFetch(`${window.BACKEND_URL}/api/agent/verification/status`);
+                if (response && response.ok) {
+                    return await response.json();
+                }
+                return null;
+            } catch (error) {
+                console.error('Error getting verification status:', error);
+                return null;
+            }
+        },
+
+        // Get environment-aware redirect URL
+        getEnvironmentUrl: function(path) {
+            const isDev = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            if (isDev) {
+                return `/frontend${path}`;
+            }
+            return path;
+        },
+
         // Exchange code for token via POST to backend
         exchangeCodeForToken: async function(code, state, businessName = null) {
             // Prevent multiple simultaneous exchanges
@@ -238,13 +261,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Show success message
                 this.showNotification('Successfully signed in!', 'success');
+
+                // NEW: Get verification status to determine redirect
+                const status = await this.getVerificationStatus();
+                console.log('Verification status:', status);
                 
-                // Redirect to agent dashboard
+                let redirectPath;
+                if (status && status.verification_status === 'not_submitted') {
+                    redirectPath = this.getEnvironmentUrl('/agent-verification.html');
+                } else {
+                    redirectPath = this.getEnvironmentUrl('/agent-dashboard.html');
+                }
+                
                 setTimeout(() => {
-                    const dashboardUrl = window.location.pathname.includes('/frontend/') 
-                        ? '/frontend/agent-dashboard.html'
-                        : '/agent-dashboard.html';
-                    window.location.href = dashboardUrl;
+                    window.location.href = redirectPath;
                 }, 1500);
                 
             } catch (error) {

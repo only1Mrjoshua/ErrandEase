@@ -5,7 +5,7 @@ from bson import ObjectId
 import logging
 
 from database import errands_collection, users_collection
-from core.roles import require_agent
+from core.roles import require_verified_agent  # CHANGED: Now using verified agent guard
 from models.errand import Errand
 from schemas.agent import (
     AgentErrandResponse, AvailableErrandResponse, AssignedErrandResponse,
@@ -67,15 +67,16 @@ def validate_status_transition(current_status: str, new_status: str, role: str) 
     return False
 
 # ==================== ROUTES ====================
+# ALL ROUTES NOW REQUIRE VERIFIED AGENT - Unverified agents cannot access any errand functionality
 
 @router.get("/available", response_model=List[AvailableErrandResponse])
 async def get_available_errands(
-    current_user: dict = Depends(require_agent),
+    current_user: dict = Depends(require_verified_agent),  # CHANGED
     limit: int = Query(50, ge=1, le=100)
 ):
     """
     Get all errands available for agents to accept
-    Security: Only agents can access, only pending unassigned errands returned
+    Security: Only verified agents can access, only pending unassigned errands returned
     """
     if errands_collection is None:
         raise HTTPException(
@@ -90,9 +91,9 @@ async def get_available_errands(
     }
     
     try:
-        # Sort by oldest first (fairness) and newest first (relevance)
+        # Sort by newest first
         cursor = errands_collection.find(query).sort([
-            ("created_at", -1)  # Newest first
+            ("created_at", -1)
         ]).limit(limit)
         
         available_errands = []
@@ -120,11 +121,11 @@ async def get_available_errands(
 
 @router.get("/assigned", response_model=List[AssignedErrandResponse])
 async def get_assigned_errands(
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Get errands assigned to the current agent
-    Security: Only the assigned agent can see their errands
+    Security: Only the verified assigned agent can see their errands
     """
     if errands_collection is None:
         raise HTTPException(
@@ -167,11 +168,11 @@ async def get_assigned_errands(
 
 @router.get("/completed", response_model=List[AssignedErrandResponse])
 async def get_completed_errands(
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Get errands completed by the current agent
-    Security: Only the assigned agent can see their completed errands
+    Security: Only the verified assigned agent can see their completed errands
     """
     if errands_collection is None:
         raise HTTPException(
@@ -215,11 +216,11 @@ async def get_completed_errands(
 @router.get("/{errand_id}", response_model=AgentErrandResponse)
 async def get_agent_errand_detail(
     errand_id: str,
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Get detailed information for a specific errand (agent view)
-    Security: Agents can only view:
+    Security: Only verified agents can view:
     - Available errands (pending, unassigned)
     - Their own assigned errands
     """
@@ -255,7 +256,7 @@ async def get_agent_errand_detail(
             detail="Errand not found"
         )
     
-    # Security check: Agents can only view:
+    # Security check: Verified agents can only view:
     # 1. Available errands (pending, unassigned)
     # 2. Their own assigned errands
     is_available = errand["status"] == "pending" and errand.get("assigned_agent_id") is None
@@ -287,19 +288,19 @@ async def get_agent_errand_detail(
         if field not in errand_dict:
             errand_dict[field] = None
     
-    logger.info(f"Agent {current_user['id']} viewed errand {errand_id}")
+    logger.info(f"Verified agent {current_user['id']} viewed errand {errand_id}")
     
     return errand_dict
 
 @router.post("/{errand_id}/accept", response_model=AgentAcceptResponse)
 async def accept_errand(
     errand_id: str,
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Accept an available errand
-    SECURITY CRITICAL: Uses atomic MongoDB update to prevent race conditions
-    Only one agent can successfully accept each errand
+    SECURITY CRITICAL: Only verified agents can accept
+    Uses atomic MongoDB update to prevent race conditions
     """
     if errands_collection is None:
         raise HTTPException(
@@ -317,12 +318,11 @@ async def accept_errand(
     now = datetime.utcnow()
     
     # ATOMIC UPDATE: Only succeeds if errand is still pending and unassigned
-    # This prevents race conditions where two agents try to accept simultaneously
     result = errands_collection.update_one(
         {
             "_id": ObjectId(errand_id),
             "status": "pending",
-            "assigned_agent_id": None  # Not assigned to anyone yet
+            "assigned_agent_id": None
         },
         {
             "$set": {
@@ -366,8 +366,7 @@ async def accept_errand(
     customer_name = await get_customer_name(updated_errand["user_id"])
     
     logger.info(
-        f"Agent {current_user['id']} accepted errand {errand_id}",
-        extra={"agent_id": current_user["id"], "errand_id": errand_id}
+        f"Verified agent {current_user['id']} accepted errand {errand_id}"
     )
     
     # Prepare response
@@ -386,11 +385,11 @@ async def accept_errand(
 @router.post("/{errand_id}/start", response_model=AgentErrandResponse)
 async def start_errand(
     errand_id: str,
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Start an accepted errand (move to in_progress)
-    Security: Only the assigned agent can start
+    Security: Only the verified assigned agent can start
     """
     if errands_collection is None:
         raise HTTPException(
@@ -454,8 +453,7 @@ async def start_errand(
     customer_name = await get_customer_name(updated_errand["user_id"])
     
     logger.info(
-        f"Agent {current_user['id']} started errand {errand_id}",
-        extra={"agent_id": current_user["id"], "errand_id": errand_id}
+        f"Verified agent {current_user['id']} started errand {errand_id}"
     )
     
     updated_errand["id"] = str(updated_errand.pop("_id"))
@@ -468,11 +466,11 @@ async def start_errand(
 @router.post("/{errand_id}/complete", response_model=AgentErrandResponse)
 async def complete_errand(
     errand_id: str,
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Complete an in-progress errand
-    Security: Only the assigned agent can complete
+    Security: Only the verified assigned agent can complete
     """
     if errands_collection is None:
         raise HTTPException(
@@ -538,8 +536,7 @@ async def complete_errand(
     customer_name = await get_customer_name(updated_errand["user_id"])
     
     logger.info(
-        f"Agent {current_user['id']} completed errand {errand_id}",
-        extra={"agent_id": current_user["id"], "errand_id": errand_id}
+        f"Verified agent {current_user['id']} completed errand {errand_id}"
     )
     
     updated_errand["id"] = str(updated_errand.pop("_id"))
@@ -551,11 +548,11 @@ async def complete_errand(
 
 @router.get("/earnings/summary", response_model=AgentEarningsResponse)
 async def get_earnings_summary(
-    current_user: dict = Depends(require_agent)
+    current_user: dict = Depends(require_verified_agent)  # CHANGED
 ):
     """
     Get earnings summary for the current agent
-    Security: Only the agent can see their own earnings
+    Security: Only verified agents can see their own earnings
     """
     if errands_collection is None:
         raise HTTPException(
