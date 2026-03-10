@@ -26,12 +26,15 @@ class AgentProfile(BaseModel):
     rating: float = 0.0
     is_active: bool = True
     
-    # Verification fields - NEW
+    # Verification fields
     verification_status: VerificationStatus = "not_submitted"
     passport_photo_url: Optional[str] = None
+    passport_photo_public_id: Optional[str] = None  # NEW: Store Cloudinary public_id
     nin_number: Optional[str] = None
     nin_card_image_url: Optional[str] = None
+    nin_card_public_id: Optional[str] = None  # NEW: Store Cloudinary public_id
     proof_of_address_url: Optional[str] = None
+    proof_of_address_public_id: Optional[str] = None  # NEW: Store Cloudinary public_id
     verification_submitted_at: Optional[datetime] = None
     verification_reviewed_at: Optional[datetime] = None
     verification_reviewed_by: Optional[str] = None

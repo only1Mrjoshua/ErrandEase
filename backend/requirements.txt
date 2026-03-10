@@ -10,3 +10,4 @@ certifi==2023.11.17
 python-dotenv==1.0.0
 itsdangerous==2.1.2
 email-validator==2.1.0  
+cloudinary==1.36.0

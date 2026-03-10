@@ -6,7 +6,7 @@ import logging
 
 from database import agent_profiles_collection, users_collection
 from core.roles import require_admin
-from schemas.agent import AgentProfileResponse
+from core.cloudinary_utils import delete_from_cloudinary
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ def serialize_profile(profile: Dict[str, Any]) -> Dict[str, Any]:
         profile["id"] = str(profile.pop("_id"))
     return profile
 
-@router.get("/agents/pending", response_model=List[AgentProfileResponse])
+@router.get("/agents/pending")
 async def get_pending_agents(current_user: dict = Depends(require_admin)):
     """
     Get all agents with pending verification
@@ -33,7 +33,7 @@ async def get_pending_agents(current_user: dict = Depends(require_admin)):
     
     return agents
 
-@router.get("/agents/all", response_model=List[AgentProfileResponse])
+@router.get("/agents/all")
 async def get_all_agents(
     current_user: dict = Depends(require_admin),
     limit: int = 100,
@@ -51,7 +51,7 @@ async def get_all_agents(
     
     return agents
 
-@router.get("/agents/{agent_id}", response_model=AgentProfileResponse)
+@router.get("/agents/{agent_id}")
 async def get_agent_profile(
     agent_id: str,
     current_user: dict = Depends(require_admin)
@@ -171,6 +171,34 @@ async def reject_agent(
     logger.info(f"Admin {current_user['id']} rejected agent {agent_id}: {reason}")
     
     return {"message": "Agent rejected successfully", "reason": reason}
+
+# Optional: Add endpoint to delete agent files from Cloudinary if needed
+@router.post("/agents/{agent_id}/delete-files")
+async def delete_agent_files(
+    agent_id: str,
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Delete agent's uploaded files from Cloudinary
+    Admin only - useful for cleanup
+    """
+    try:
+        profile = agent_profiles_collection.find_one({"_id": ObjectId(agent_id)})
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid agent ID format"
+        )
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found"
+        )
+    
+    # Note: Cloudinary deletion would need public_ids
+    # This is optional and requires storing public_ids
+    return {"message": "This endpoint requires storing public_ids first"}
 
 @router.get("/stats/agents")
 async def get_agent_stats(current_user: dict = Depends(require_admin)):

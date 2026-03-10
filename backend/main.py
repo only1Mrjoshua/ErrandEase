@@ -55,8 +55,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(errands.router)
 app.include_router(agent_errands.router)
-app.include_router(agent_verification.router)  # NEW
-app.include_router(admin_agents.router)  # NEW
+app.include_router(agent_verification.router)
+app.include_router(admin_agents.router)
 
 @app.get("/")
 async def root():
@@ -70,13 +70,8 @@ async def health_check():
         "environment": settings.ENVIRONMENT
     }
 
-# Create uploads directory if it doesn't exist
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
-AGENT_VERIFICATION_DIR = os.path.join(UPLOAD_DIR, "agent_verification")
-os.makedirs(AGENT_VERIFICATION_DIR, exist_ok=True)
-
-# Mount uploads directory for serving files
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+# REMOVED: Local upload directory mounting
+# We no longer need this since files are stored in Cloudinary
 
 # Static files
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

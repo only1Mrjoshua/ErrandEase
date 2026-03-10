@@ -34,23 +34,28 @@ class Settings:
             )
             self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5500")
         
-        # JWT Settings - Separate secrets for different purposes
+        # JWT Settings
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
         self.SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "")
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-        self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))  # Short-lived
+        self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
         self.JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
         
         # Security settings
         self.RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "10"))
         self.RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))  # seconds
         
+        # Cloudinary Settings - NEW
+        self.CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+        self.CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "")
+        self.CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "")
+        self.CLOUDINARY_UPLOAD_FOLDER = os.getenv("CLOUDINARY_UPLOAD_FOLDER", "errandease/verifications")
+        
         # Validate critical settings
         self.validate()
 
     def validate(self):
         """Validate that critical settings are configured"""
-        # Log only non-sensitive info
         logger.info(f"Environment: {self.ENVIRONMENT}")
         logger.info(f"Frontend URL: {self.FRONTEND_URL}")
         
@@ -65,6 +70,12 @@ class Settings:
                 raise RuntimeError("JWT_SECRET_KEY must be set in production")
             if not self.SESSION_SECRET_KEY:
                 raise RuntimeError("SESSION_SECRET_KEY must be set in production")
+            if not self.CLOUDINARY_CLOUD_NAME:  # NEW
+                raise RuntimeError("CLOUDINARY_CLOUD_NAME must be set in production")
+            if not self.CLOUDINARY_API_KEY:
+                raise RuntimeError("CLOUDINARY_API_KEY must be set in production")
+            if not self.CLOUDINARY_API_SECRET:
+                raise RuntimeError("CLOUDINARY_API_SECRET must be set in production")
             
             # Ensure secrets are not defaults
             if self.JWT_SECRET_KEY == "your-secret-key-change-this-in-production":
