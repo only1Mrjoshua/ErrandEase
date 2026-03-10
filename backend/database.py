@@ -30,6 +30,7 @@ users_collection = db["users"]
 refresh_tokens_collection = db["refresh_tokens"]
 errands_collection = db["errands"]
 agent_profiles_collection = db["agent_profiles"]  # NEW
+appeals_collection = db["appeals"]
 
 # Create indexes
 try:
@@ -60,6 +61,10 @@ try:
     agent_profiles_collection.create_index("verification_status")
     agent_profiles_collection.create_index("created_at")
     agent_profiles_collection.create_index([("verification_status", 1), ("created_at", -1)])
+
+    appeals_collection.create_index("agent_id")
+    appeals_collection.create_index("status")
+    appeals_collection.create_index("created_at")
     
     logger.info("📊 Database indexes created successfully")
 except Exception as e:
