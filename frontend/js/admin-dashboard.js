@@ -604,9 +604,48 @@
 
     async function fetchAgentDetails(agentId) {
         try {
+            console.log('Fetching agent details for ID:', agentId);
             const response = await makeAuthenticatedRequest(`/api/admin/agents/${agentId}`);
             if (response && response.ok) {
-                return await response.json();
+                const profileData = await response.json();
+                console.log('Raw agent profile response:', profileData);
+                
+                // Find the corresponding agent from the agents list to get user data
+                const agentFromList = agents.find(a => a.id === agentId || a.user_id === agentId);
+                console.log('Agent from list:', agentFromList);
+                
+                // Combine profile data with user data from the list
+                const agentData = {
+                    // Profile data
+                    id: profileData.id || agentId,
+                    user_id: profileData.user_id || (agentFromList ? agentFromList.user_id : ''),
+                    
+                    // User data -优先使用profileData里的，如果没有则从list获取
+                    email: profileData.email || (agentFromList ? agentFromList.email : ''),
+                    name: profileData.name || (agentFromList ? agentFromList.name : ''),
+                    username: profileData.username || (agentFromList ? agentFromList.username : ''),
+                    
+                    // Profile fields
+                    phone_number: profileData.phone_number || '',
+                    business_name: profileData.business_name || '',
+                    account_status: profileData.account_status || 'active',
+                    verification_status: profileData.verification_status || 'not_submitted',
+                    is_active: profileData.is_active !== undefined ? profileData.is_active : true,
+                    
+                    // Additional fields
+                    id_verified: profileData.id_verified || false,
+                    blocked_reason: profileData.blocked_reason || null,
+                    total_earnings: profileData.total_earnings || 0,
+                    pending_earnings: profileData.pending_earnings || 0,
+                    completed_errands_count: profileData.completed_errands_count || 0,
+                    rating: profileData.rating || 0,
+                    created_at: profileData.created_at,
+                    last_login: profileData.last_login || (agentFromList ? agentFromList.last_login : null),
+                    assigned_errands_count: profileData.assigned_errands_count || 0
+                };
+                
+                console.log('Combined agent details:', agentData);
+                return agentData;
             }
             return null;
         } catch (error) {
@@ -716,9 +755,203 @@
         }
     }
 
-    async function updateAgent(agentId, updateData) {
+    async function editAgent(agentId) {
+        console.log('editAgent called with ID:', agentId);
+        
         try {
-            const response = await makeAuthenticatedRequest(`/api/admin/agents/${agentId}`, {
+            showLoading('Loading agent data...');
+            
+            // First, find the agent in the current list to get both IDs
+            const foundAgent = agents.find(a => a.id === agentId || a.user_id === agentId);
+            console.log('Found agent in list:', foundAgent);
+            
+            if (!foundAgent) {
+                showToast('Agent not found', 'error');
+                return;
+            }
+            
+            // Fetch fresh data to ensure we have the latest
+            const agent = await fetchAgentDetails(foundAgent.id);
+            
+            if (!agent) {
+                showToast('Agent not found', 'error');
+                return;
+            }
+
+            // Use the user_id from the found agent for updates
+            const updateUserId = foundAgent.user_id;
+            console.log('Using user_id for update:', updateUserId);
+
+            // Log the final data that will be displayed
+            console.log('Final agent data for modal:', {
+                name: agent.name,
+                username: agent.username,
+                business_name: agent.business_name,
+                phone_number: agent.phone_number,
+                account_status: agent.account_status,
+                verification_status: agent.verification_status,
+                is_active: agent.is_active
+            });
+
+            // Create and show the edit modal
+            const modal = document.createElement('div');
+            modal.id = 'editAgentModal';
+            modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+
+            // Ensure all values are properly escaped and default to empty string if null/undefined
+            const safeName = agent.name ? escapeHtml(String(agent.name)) : (foundAgent.name ? escapeHtml(String(foundAgent.name)) : '');
+            const safeUsername = agent.username ? escapeHtml(String(agent.username)) : (foundAgent.username ? escapeHtml(String(foundAgent.username)) : '');
+            const safeBusinessName = agent.business_name ? escapeHtml(String(agent.business_name)) : '';
+            const safePhoneNumber = agent.phone_number ? escapeHtml(String(agent.phone_number)) : '';
+            
+            console.log('Safe values for form:', {
+                safeName,
+                safeUsername,
+                safeBusinessName,
+                safePhoneNumber
+            });
+
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold text-secondary">Edit Agent</h3>
+                        <button onclick="this.closest('#editAgentModal').remove()" class="text-slate-400 hover:text-primary">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                    
+                    <form id="editAgentForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                            <input type="text" id="editAgentName" value="${safeName}" required
+                                class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                            <input type="text" id="editAgentUsername" value="${safeUsername}" required
+                                class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Business Name</label>
+                            <input type="text" id="editAgentBusinessName" value="${safeBusinessName}"
+                                class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                            <input type="tel" id="editAgentPhone" value="${safePhoneNumber}"
+                                class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">New Password (leave blank to keep current)</label>
+                            <input type="password" id="editAgentPassword" placeholder="Enter new password"
+                                class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Account Status</label>
+                                <select id="editAgentAccountStatus" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                                    <option value="active" ${agent.account_status === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="blocked" ${agent.account_status === 'blocked' ? 'selected' : ''}>Blocked</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Verification</label>
+                                <select id="editAgentVerificationStatus" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                                    <option value="not_submitted" ${agent.verification_status === 'not_submitted' ? 'selected' : ''}>Not Submitted</option>
+                                    <option value="pending" ${agent.verification_status === 'pending' ? 'selected' : ''}>Pending</option>
+                                    <option value="approved" ${agent.verification_status === 'approved' ? 'selected' : ''}>Approved</option>
+                                    <option value="rejected" ${agent.verification_status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="editAgentActive" ${agent.is_active ? 'checked' : ''}>
+                            <label for="editAgentActive" class="text-sm text-slate-700">Account Active</label>
+                        </div>
+                        
+                        <button type="submit" class="w-full bg-primary hover:bg-emerald-600 text-white font-medium py-3 rounded-lg transition-colors">
+                            Update Agent
+                        </button>
+                    </form>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Add form submission handler
+            document.getElementById('editAgentForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const updateData = {
+                    name: document.getElementById('editAgentName').value.trim(),
+                    username: document.getElementById('editAgentUsername').value.trim(),
+                    business_name: document.getElementById('editAgentBusinessName').value.trim() || null,
+                    phone_number: document.getElementById('editAgentPhone').value.trim() || null,
+                    account_status: document.getElementById('editAgentAccountStatus').value,
+                    verification_status: document.getElementById('editAgentVerificationStatus').value,
+                    is_active: document.getElementById('editAgentActive').checked
+                };
+
+                const password = document.getElementById('editAgentPassword').value;
+                if (password) {
+                    updateData.password = password;
+                }
+
+                // Remove empty strings but keep valid values
+                Object.keys(updateData).forEach(key => {
+                    if (updateData[key] === '') {
+                        updateData[key] = null;
+                    }
+                });
+
+                console.log('Form update data:', updateData);
+                console.log('Updating agent with user_id:', updateUserId);
+
+                try {
+                    showLoading('Updating agent...');
+                    const result = await updateAgent(updateUserId, updateData);
+                    console.log('Update result:', result);
+                    showToast('Agent updated successfully', 'success');
+                    modal.remove();
+                    await refreshCurrentTab();
+                } catch (error) {
+                    console.error('Error in form submission:', error);
+                    showToast(error.message, 'error');
+                } finally {
+                    hideLoading();
+                }
+            });
+
+        } catch (error) {
+            console.error('Error in editAgent:', error);
+            showToast('Error loading agent data', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function updateAgent(userId, updateData) {
+        try {
+            console.log('updateAgent called with user_id:', userId);
+            console.log('updateData:', updateData);
+            
+            // Clean the ID
+            const cleanId = userId.toString().trim();
+            console.log('Clean ID:', cleanId);
+            
+            const response = await makeAuthenticatedRequest(`/api/admin/agents/${cleanId}`, {
                 method: 'PUT',
                 body: JSON.stringify(updateData)
             });
@@ -727,10 +960,23 @@
                 return await response.json();
             } else if (response) {
                 const error = await response.json();
-                throw new Error(error.detail || 'Failed to update agent');
+                console.error('Error response:', error);
+                
+                if (error.detail) {
+                    if (Array.isArray(error.detail)) {
+                        const messages = error.detail.map(err => 
+                            `${err.loc.join('.')}: ${err.msg}`
+                        ).join(', ');
+                        throw new Error(`Validation error: ${messages}`);
+                    } else {
+                        throw new Error(error.detail);
+                    }
+                } else {
+                    throw new Error(`Failed to update agent (HTTP ${response.status})`);
+                }
             }
         } catch (error) {
-            console.error('Error updating agent:', error);
+            console.error('Error in updateAgent:', error);
             throw error;
         }
     }
@@ -1142,6 +1388,12 @@
             `;
         }
 
+        console.log('Rendering agents with IDs:', agents.map(a => ({ 
+            id: a.id, 
+            user_id: a.user_id,
+            name: a.name 
+        })));
+
         return agents.map(agent => {
             const verificationColors = {
                 'approved': 'bg-emerald-100 text-emerald-700',
@@ -1154,6 +1406,12 @@
                 'active': 'bg-emerald-100 text-emerald-700',
                 'blocked': 'bg-red-100 text-red-700'
             };
+
+            // IMPORTANT: Use agent.id for API calls, not agent.user_id
+            // The agent.id is the profile ID that the backend expects
+            const actionId = agent.id || agent.user_id;
+            
+            console.log(`Agent ${agent.name}: id=${agent.id}, user_id=${agent.user_id}, using=${actionId}`);
 
             return `
                 <tr class="border-b border-slate-100 hover:bg-slate-50">
@@ -1176,13 +1434,13 @@
                     <td class="py-3 px-4 text-sm font-medium">${formatCurrency(agent.total_earnings)}</td>
                     <td class="py-3 px-4">
                         <div class="flex gap-2">
-                            <button onclick="window.adminDashboard?.viewAgent('${escapeHtml(agent.id)}')" class="text-primary hover:text-emerald-600" title="View">
+                            <button onclick="window.adminDashboard?.viewAgent('${escapeHtml(actionId)}')" class="text-primary hover:text-emerald-600" title="View">
                                 <span class="material-symbols-outlined text-lg">visibility</span>
                             </button>
-                            <button onclick="window.adminDashboard?.editAgent('${escapeHtml(agent.id)}')" class="text-blue-600 hover:text-blue-700" title="Edit">
+                            <button onclick="window.adminDashboard?.editAgent('${escapeHtml(actionId)}')" class="text-blue-600 hover:text-blue-700" title="Edit">
                                 <span class="material-symbols-outlined text-lg">edit</span>
                             </button>
-                            <button onclick="window.adminDashboard?.deleteAgent('${escapeHtml(agent.id)}')" class="text-red-600 hover:text-red-700" title="Delete">
+                            <button onclick="window.adminDashboard?.deleteAgent('${escapeHtml(actionId)}')" class="text-red-600 hover:text-red-700" title="Delete">
                                 <span class="material-symbols-outlined text-lg">delete</span>
                             </button>
                         </div>
@@ -1731,15 +1989,38 @@
     }
 
     async function viewAgent(agentId) {
+        console.log('viewAgent called with ID:', agentId);
+        
         try {
             showLoading('Loading agent details...');
-            const agent = await fetchAgentDetails(agentId);
-            const errands = await fetchAgentErrands(agentId);
+            
+            // Try to find the correct ID to use
+            let correctId = agentId;
+            let agent = null;
+            
+            // First, try to fetch with the provided ID
+            agent = await fetchAgentDetails(agentId);
+            
+            // If that fails, try to find the agent in the current list
+            if (!agent) {
+                console.log('Agent not found with ID:', agentId);
+                console.log('Current agents list:', agents.map(a => ({ id: a.id, user_id: a.user_id, name: a.name })));
+                
+                const foundAgent = agents.find(a => a.id === agentId || a.user_id === agentId);
+                if (foundAgent) {
+                    console.log('Found agent in list with ID:', foundAgent.id);
+                    correctId = foundAgent.id;
+                    agent = await fetchAgentDetails(correctId);
+                }
+            }
             
             if (!agent) {
                 showToast('Agent not found', 'error');
                 return;
             }
+
+            // Fetch agent's errands
+            const errands = await fetchAgentErrands(correctId);
 
             const modal = document.createElement('div');
             modal.id = 'viewAgentModal';
@@ -1842,6 +2123,7 @@
 
             document.body.appendChild(modal);
         } catch (error) {
+            console.error('Error in viewAgent:', error);
             showToast('Error loading agent details', 'error');
         } finally {
             hideLoading();
@@ -2110,15 +2392,55 @@
     }
 
     async function editAgent(agentId) {
+        console.log('editAgent called with ID:', agentId);
+        
         try {
             showLoading('Loading agent data...');
-            const agent = await fetchAgentDetails(agentId);
+            
+            let agent = null;
+            let userIdForUpdate = null;
+            
+            // First, try to find the agent in the current list
+            const foundAgent = agents.find(a => a.id === agentId || a.user_id === agentId);
+            console.log('Found agent in list:', foundAgent);
+            
+            if (foundAgent) {
+                // Fetch fresh data to ensure we have the latest
+                agent = await fetchAgentDetails(foundAgent.id);
+                userIdForUpdate = foundAgent.user_id;
+                console.log('Fetched agent details with profile ID:', foundAgent.id);
+            } else {
+                // Try to fetch directly with the provided ID
+                agent = await fetchAgentDetails(agentId);
+                if (agent) {
+                    // If we fetched with profile ID, we need to find the user_id
+                    const listAgent = agents.find(a => a.id === agentId);
+                    userIdForUpdate = listAgent ? listAgent.user_id : agentId;
+                    console.log('Fetched agent directly:', agent);
+                }
+            }
             
             if (!agent) {
+                console.error('Agent not found with ID:', agentId);
                 showToast('Agent not found', 'error');
                 return;
             }
 
+            console.log('Agent data for modal:', {
+                name: agent.name,
+                username: agent.username,
+                business_name: agent.business_name,
+                phone_number: agent.phone_number,
+                account_status: agent.account_status,
+                verification_status: agent.verification_status,
+                is_active: agent.is_active
+            });
+
+            // Store the correct user_id for the update
+            const updateUserId = userIdForUpdate || agent.user_id || agentId;
+            console.log('Using user_id for update:', updateUserId);
+
+            // Create and show the edit modal
             const modal = document.createElement('div');
             modal.id = 'editAgentModal';
             modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
@@ -2127,6 +2449,19 @@
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
+
+            // Ensure all values are properly escaped and default to empty string if null/undefined
+            const safeName = agent.name ? escapeHtml(agent.name) : '';
+            const safeUsername = agent.username ? escapeHtml(agent.username) : '';
+            const safeBusinessName = agent.business_name ? escapeHtml(agent.business_name) : '';
+            const safePhoneNumber = agent.phone_number ? escapeHtml(agent.phone_number) : '';
+            
+            console.log('Safe values:', {
+                safeName,
+                safeUsername,
+                safeBusinessName,
+                safePhoneNumber
+            });
 
             modal.innerHTML = `
                 <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
@@ -2140,31 +2475,31 @@
                     <form id="editAgentForm" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                            <input type="text" id="editAgentName" value="${escapeHtml(agent.name)}"
+                            <input type="text" id="editAgentName" value="${safeName}"
                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
-                            <input type="text" id="editAgentUsername" value="${escapeHtml(agent.username)}"
+                            <input type="text" id="editAgentUsername" value="${safeUsername}"
                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Business Name</label>
-                            <input type="text" id="editAgentBusinessName" value="${escapeHtml(agent.business_name || '')}"
+                            <input type="text" id="editAgentBusinessName" value="${safeBusinessName}"
                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
-                            <input type="tel" id="editAgentPhone" value="${escapeHtml(agent.phone_number || '')}"
+                            <input type="tel" id="editAgentPhone" value="${safePhoneNumber}"
                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">New Password (leave blank to keep current)</label>
-                            <input type="password" id="editAgentPassword" minlength="8"
+                            <input type="password" id="editAgentPassword" placeholder="Enter new password"
                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
                         </div>
                         
@@ -2202,6 +2537,7 @@
 
             document.body.appendChild(modal);
 
+            // Add form submission handler
             document.getElementById('editAgentForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
 
@@ -2220,19 +2556,33 @@
                     updateData.password = password;
                 }
 
+                // Remove empty strings
+                Object.keys(updateData).forEach(key => {
+                    if (updateData[key] === '') {
+                        updateData[key] = null;
+                    }
+                });
+
+                console.log('Form update data:', updateData);
+                console.log('Updating agent with user_id:', updateUserId);
+
                 try {
                     showLoading('Updating agent...');
-                    await updateAgent(agentId, updateData);
+                    const result = await updateAgent(updateUserId, updateData);
+                    console.log('Update result:', result);
                     showToast('Agent updated successfully', 'success');
                     modal.remove();
                     await refreshCurrentTab();
                 } catch (error) {
+                    console.error('Error in form submission:', error);
                     showToast(error.message, 'error');
                 } finally {
                     hideLoading();
                 }
             });
+
         } catch (error) {
+            console.error('Error in editAgent:', error);
             showToast('Error loading agent data', 'error');
         } finally {
             hideLoading();
