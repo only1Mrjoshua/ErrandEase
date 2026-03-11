@@ -981,20 +981,29 @@
         }
     }
 
-    async function apiDeleteAgent(agentId) {
+    async function apiDeleteAgent(userId) {
         try {
-            const response = await makeAuthenticatedRequest(`/api/admin/agents/${agentId}`, {
+            console.log('apiDeleteAgent called with user_id:', userId);
+            
+            // Clean the ID
+            const cleanId = userId.toString().trim();
+            console.log('Clean ID for delete:', cleanId);
+            
+            const response = await makeAuthenticatedRequest(`/api/admin/agents/${cleanId}`, {
                 method: 'DELETE'
             });
+            
+            console.log('Delete response status:', response?.status);
             
             if (response && response.ok) {
                 return await response.json();
             } else if (response) {
                 const error = await response.json();
-                throw new Error(error.detail || 'Failed to delete agent');
+                console.error('Error response:', error);
+                throw new Error(error.detail || `Failed to delete agent (HTTP ${response.status})`);
             }
         } catch (error) {
-            console.error('Error deleting agent:', error);
+            console.error('Error in apiDeleteAgent:', error);
             throw error;
         }
     }
@@ -2590,26 +2599,40 @@
     }
 
     async function deleteAgent(agentId) {
+        console.log('deleteAgent called with ID:', agentId);
+        
+        // Find the correct user_id to use for deletion
+        const foundAgent = agents.find(a => a.id === agentId || a.user_id === agentId);
+        
+        if (!foundAgent) {
+            console.error('Agent not found in list with ID:', agentId);
+            showToast('Agent not found', 'error');
+            return;
+        }
+        
+        // Use the user_id for deletion (backend expects user_id in the URL)
+        const deleteUserId = foundAgent.user_id;
+        console.log('Found agent:', { 
+            name: foundAgent.name, 
+            profile_id: foundAgent.id, 
+            user_id: foundAgent.user_id,
+            using_for_delete: deleteUserId 
+        });
+        
         showConfirmModal({
             title: 'Delete Agent',
             message: 'Are you sure you want to delete this agent? This action cannot be undone and will remove all associated data.',
             confirmText: 'Delete',
             destructive: true,
             onConfirm: async () => {
-                // MODAL IS REMOVED FIRST (handled in createCustomConfirmModal)
-                // Then this callback executes
-                
                 try {
-                    // Show loading overlay
                     showLoading('Deleting agent...');
                     
-                    // Perform the delete operation
-                    await apiDeleteAgent(agentId);
+                    console.log('Making delete request for user_id:', deleteUserId);
+                    const result = await apiDeleteAgent(deleteUserId);
+                    console.log('Delete result:', result);
                     
-                    // Hide loading
                     hideLoading();
-                    
-                    // Show success message
                     showToast('Agent deleted successfully', 'success');
                     
                     // Small delay to ensure toast is visible
@@ -2619,12 +2642,9 @@
                     await refreshCurrentTab();
                     
                 } catch (error) {
-                    // Hide loading on error
                     hideLoading();
-                    
-                    // Show error message
-                    showToast(error.message || 'Failed to delete agent', 'error');
                     console.error('Delete error:', error);
+                    showToast(error.message || 'Failed to delete agent', 'error');
                 }
             }
         });
