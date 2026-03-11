@@ -484,25 +484,46 @@ async def delete_customer(
     customer_id: str,
     current_user: dict = Depends(require_admin)
 ):
-    if not validate_object_id(customer_id):
+    # Log the received ID for debugging
+    logger.info(f"Attempting to delete customer with ID: {customer_id}")
+    
+    # More flexible ObjectId validation
+    try:
+        # Try to convert to ObjectId directly - this will handle both with and without braces
+        obj_id = ObjectId(customer_id.strip('{}'))
+    except Exception as e:
+        logger.error(f"Invalid ObjectId format: {customer_id}, error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid customer ID format"
+            detail=f"Invalid customer ID format: {customer_id}. Expected a valid MongoDB ObjectId."
         )
 
+    # Search using the converted ObjectId
     customer = users_collection.find_one({
-        "_id": ObjectId(customer_id),
+        "_id": obj_id,
         "role": "customer"
     })
 
     if not customer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Customer not found"
-        )
+        logger.warning(f"Customer not found with ID: {customer_id} (ObjectId: {obj_id})")
+        
+        # Try to find by string ID as fallback (in case IDs are stored as strings)
+        customer = users_collection.find_one({
+            "_id": customer_id,
+            "role": "customer"
+        })
+        
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Customer with ID {customer_id} not found"
+            )
+        else:
+            obj_id = customer_id  # Use string ID for deletion
 
+    # Check for active errands
     pending_errands = errands_collection.count_documents({
-        "user_id": customer_id,
+        "user_id": str(obj_id),  # Convert to string for comparison
         "status": {"$in": ["pending", "accepted", "in_progress", "awaiting_confirmation"]}
     })
 
@@ -512,10 +533,12 @@ async def delete_customer(
             detail=f"Cannot delete customer with {pending_errands} active errands. Cancel or complete them first."
         )
 
-    refresh_tokens_collection.delete_many({"user_id": customer_id})
-    errands_collection.delete_many({"user_id": customer_id})
+    # Delete related data
+    refresh_tokens_collection.delete_many({"user_id": str(obj_id)})
+    errands_collection.delete_many({"user_id": str(obj_id)})
 
-    result = users_collection.delete_one({"_id": ObjectId(customer_id)})
+    # Delete the user
+    result = users_collection.delete_one({"_id": obj_id})
 
     if result.deleted_count == 0:
         raise HTTPException(
@@ -525,7 +548,7 @@ async def delete_customer(
 
     logger.info(f"Admin {current_user['id']} deleted customer: {customer_id}")
 
-    return {"message": "Customer deleted successfully"}
+    return {"message": "Customer deleted successfully", "success": True}
 
 
 @router.get("/customers/{customer_id}/errands")

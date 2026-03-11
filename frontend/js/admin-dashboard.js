@@ -203,12 +203,55 @@
     // ==================== UNIFIED UI HELPERS ====================
 
     function showToast(message, type = 'info', duration = 5000) {
+        console.log(`Toast [${type}]: ${message}`);
+        
         if (window.errandEaseUI && window.errandEaseUI.showToast) {
             return window.errandEaseUI.showToast(message, type, { duration });
         }
         
-        // Fallback if ui-feedback.js not loaded
-        console.log(`Toast [${type}]: ${message}`);
+        // Fallback for important messages
+        if (type === 'error') {
+            console.error(`Error: ${message}`);
+            alert(`Error: ${message}`);
+        } else if (type === 'success') {
+            console.log(`Success: ${message}`);
+            createSimpleToast(message, type);
+        }
+    }
+
+    function createSimpleToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `fixed top-4 right-4 z-[300] px-4 py-2 rounded-lg shadow-lg text-white ${
+            type === 'error' ? 'bg-red-500' : 
+            type === 'success' ? 'bg-green-500' : 
+            'bg-blue-500'
+        }`;
+        toast.style.animation = 'slideIn 0.3s ease';
+        toast.textContent = message;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+        
+        // Add animation styles if not exists
+        if (!document.getElementById('toastAnimationStyle')) {
+            const style = document.createElement('style');
+            style.id = 'toastAnimationStyle';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 
     function showLoading(message = 'Loading...') {
@@ -230,23 +273,171 @@
     }
 
     function showConfirmModal(options = {}) {
-        if (window.errandEaseUI && window.errandEaseUI.showConfirm) {
+        console.log('showConfirmModal called with options:', options);
+        
+        // Try to use errandEaseUI if available
+        if (window.errandEaseUI && typeof window.errandEaseUI.showConfirm === 'function') {
+            console.log('Using errandEaseUI.showConfirm');
+            
+            // Store the original onConfirm
+            const originalOnConfirm = options.onConfirm;
+            
+            // Create a wrapper function that will close ALL modals first
+            const wrappedOnConfirm = async () => {
+                // IMMEDIATELY close all possible modals
+                const allModals = document.querySelectorAll('.fixed.inset-0, [class*="modal"], [class*="Modal"], [class*="backdrop"], [zindex], [z-index]');
+                allModals.forEach(modal => {
+                    if (modal.style && (modal.style.zIndex >= 100 || modal.classList.contains('z-[200]'))) {
+                        modal.remove();
+                        console.log('Removed modal:', modal);
+                    }
+                });
+                
+                // Also try to find any element with high z-index
+                document.querySelectorAll('*').forEach(el => {
+                    const zIndex = window.getComputedStyle(el).zIndex;
+                    if (zIndex && parseInt(zIndex) >= 100) {
+                        if (el.classList.contains('hidden')) return;
+                        el.remove();
+                    }
+                });
+                
+                // Force remove any element that might be the modal backdrop
+                const backdrops = document.querySelectorAll('[style*="background-color: rgba(0, 0, 0, 0.5)"]');
+                backdrops.forEach(backdrop => backdrop.remove());
+                
+                // Small delay to ensure DOM updates
+                await new Promise(resolve => setTimeout(resolve, 10));
+                
+                // Execute original callback
+                if (originalOnConfirm) {
+                    await originalOnConfirm();
+                }
+            };
+            
+            // Call errandEaseUI.showConfirm with wrapped onConfirm
             return window.errandEaseUI.showConfirm({
                 title: options.title || 'Confirm Action',
                 message: options.message || 'Are you sure you want to perform this action?',
                 confirmText: options.confirmText || 'Confirm',
                 cancelText: options.cancelText || 'Cancel',
-                onConfirm: options.onConfirm,
+                onConfirm: wrappedOnConfirm,
                 onCancel: options.onCancel,
                 destructive: options.destructive || false
             });
         }
         
-        // Fallback
-        if (confirm(options.message || 'Are you sure?')) {
-            if (options.onConfirm) options.onConfirm();
-        } else {
+        // Fallback: Create custom modal
+        console.log('Using custom modal fallback');
+        createCustomConfirmModal(options);
+    }
+
+    function createCustomConfirmModal(options = {}) {
+        // Remove any existing modals
+        const existingModal = document.getElementById('customConfirmModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Create modal container
+        const modal = document.createElement('div');
+        modal.id = 'customConfirmModal';
+        modal.className = 'fixed inset-0 z-[200] flex items-center justify-center p-4';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        modal.style.backdropFilter = 'blur(4px)';
+        
+        // Create modal content
+        const modalContent = document.createElement('div');
+        modalContent.className = 'bg-white rounded-2xl max-w-md w-full shadow-xl p-6';
+        modalContent.style.maxWidth = '400px';
+        modalContent.style.animation = 'modalFadeIn 0.2s ease-out';
+        
+        // Add title
+        const title = document.createElement('h3');
+        title.className = 'text-xl font-bold text-secondary mb-2';
+        title.textContent = options.title || 'Confirm Action';
+        
+        // Add message
+        const message = document.createElement('p');
+        message.className = 'text-slate-600 mb-6';
+        message.textContent = options.message || 'Are you sure you want to perform this action?';
+        
+        // Create button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'flex gap-3 justify-end';
+        
+        // Cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors';
+        cancelBtn.textContent = options.cancelText || 'Cancel';
+        cancelBtn.onclick = () => {
+            modal.remove();
             if (options.onCancel) options.onCancel();
+        };
+        
+        // Confirm button
+        const confirmBtn = document.createElement('button');
+        const isDestructive = options.destructive || false;
+        confirmBtn.className = `px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+            isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-emerald-600'
+        }`;
+        confirmBtn.textContent = options.confirmText || 'Confirm';
+
+        // FIX: Change this to async
+        confirmBtn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Remove modal immediately
+            modal.remove();
+            
+            // Small delay to ensure DOM is updated
+            await new Promise(resolve => setTimeout(resolve, 10));
+            
+            // Execute callback
+            if (options.onConfirm) {
+                try {
+                    await options.onConfirm();
+                } catch (error) {
+                    console.error('Error in confirm handler:', error);
+                    hideLoading();
+                    showToast('An error occurred', 'error');
+                }
+            }
+        };
+        
+        // Assemble modal
+        buttonContainer.appendChild(cancelBtn);
+        buttonContainer.appendChild(confirmBtn);
+        
+        modalContent.appendChild(title);
+        modalContent.appendChild(message);
+        modalContent.appendChild(buttonContainer);
+        
+        modal.appendChild(modalContent);
+        
+        // Close on backdrop click
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                if (options.onCancel) options.onCancel();
+            }
+        };
+        
+        // Add to document
+        document.body.appendChild(modal);
+        
+        // Add animation style if not exists
+        if (!document.getElementById('modalAnimationStyle')) {
+            const style = document.createElement('style');
+            style.id = 'modalAnimationStyle';
+            style.textContent = `
+                @keyframes modalFadeIn {
+                    from { opacity: 0; transform: scale(0.95); }
+                    to { opacity: 1; transform: scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
         }
     }
 
@@ -488,7 +679,7 @@
         }
     }
 
-    async function deleteCustomer(customerId) {
+    async function apiDeleteCustomer(customerId) {
         try {
             const response = await makeAuthenticatedRequest(`/api/admin/customers/${customerId}`, {
                 method: 'DELETE'
@@ -544,7 +735,7 @@
         }
     }
 
-    async function deleteAgent(agentId) {
+    async function apiDeleteAgent(agentId) {
         try {
             const response = await makeAuthenticatedRequest(`/api/admin/agents/${agentId}`, {
                 method: 'DELETE'
@@ -856,13 +1047,13 @@
                 <td class="py-3 px-4 text-sm text-slate-600">${customer.created_at ? new Date(customer.created_at).toLocaleDateString() : 'N/A'}</td>
                 <td class="py-3 px-4">
                     <div class="flex gap-2">
-                        <button onclick="window.adminDashboard?.viewCustomer('${customer.id}')" class="text-primary hover:text-emerald-600" title="View">
+                        <button onclick="window.adminDashboard?.viewCustomer('${escapeHtml(customer.id)}')" class="text-primary hover:text-emerald-600" title="View">
                             <span class="material-symbols-outlined text-lg">visibility</span>
                         </button>
-                        <button onclick="window.adminDashboard?.editCustomer('${customer.id}')" class="text-blue-600 hover:text-blue-700" title="Edit">
+                        <button onclick="window.adminDashboard?.editCustomer('${escapeHtml(customer.id)}')" class="text-blue-600 hover:text-blue-700" title="Edit">
                             <span class="material-symbols-outlined text-lg">edit</span>
                         </button>
-                        <button onclick="window.adminDashboard?.deleteCustomer('${customer.id}')" class="text-red-600 hover:text-red-700" title="Delete">
+                        <button onclick="window.adminDashboard?.deleteCustomer('${escapeHtml(customer.id)}')" class="text-red-600 hover:text-red-700" title="Delete">
                             <span class="material-symbols-outlined text-lg">delete</span>
                         </button>
                     </div>
@@ -985,13 +1176,13 @@
                     <td class="py-3 px-4 text-sm font-medium">${formatCurrency(agent.total_earnings)}</td>
                     <td class="py-3 px-4">
                         <div class="flex gap-2">
-                            <button onclick="window.adminDashboard?.viewAgent('${agent.id}')" class="text-primary hover:text-emerald-600" title="View">
+                            <button onclick="window.adminDashboard?.viewAgent('${escapeHtml(agent.id)}')" class="text-primary hover:text-emerald-600" title="View">
                                 <span class="material-symbols-outlined text-lg">visibility</span>
                             </button>
-                            <button onclick="window.adminDashboard?.editAgent('${agent.id}')" class="text-blue-600 hover:text-blue-700" title="Edit">
+                            <button onclick="window.adminDashboard?.editAgent('${escapeHtml(agent.id)}')" class="text-blue-600 hover:text-blue-700" title="Edit">
                                 <span class="material-symbols-outlined text-lg">edit</span>
                             </button>
-                            <button onclick="window.adminDashboard?.deleteAgent('${agent.id}')" class="text-red-600 hover:text-red-700" title="Delete">
+                            <button onclick="window.adminDashboard?.deleteAgent('${escapeHtml(agent.id)}')" class="text-red-600 hover:text-red-700" title="Delete">
                                 <span class="material-symbols-outlined text-lg">delete</span>
                             </button>
                         </div>
@@ -1104,10 +1295,10 @@
                 <td class="py-3 px-4 text-sm text-slate-600">${errand.date_requested ? new Date(errand.date_requested).toLocaleDateString() : 'N/A'}</td>
                 <td class="py-3 px-4">
                     <div class="flex gap-2">
-                        <button onclick="window.adminDashboard?.viewErrand('${errand.id}')" class="text-primary hover:text-emerald-600" title="View">
+                        <button onclick="window.adminDashboard?.viewErrand('${escapeHtml(errand.id)}')" class="text-primary hover:text-emerald-600" title="View">
                             <span class="material-symbols-outlined text-lg">visibility</span>
                         </button>
-                        <button onclick="window.adminDashboard?.showAssignModal('${errand.id}')" class="text-blue-600 hover:text-blue-700" title="Assign/Reassign">
+                        <button onclick="window.adminDashboard?.showAssignModal('${escapeHtml(errand.id)}')" class="text-blue-600 hover:text-blue-700" title="Assign/Reassign">
                             <span class="material-symbols-outlined text-lg">swap_horiz</span>
                         </button>
                     </div>
@@ -1193,12 +1384,14 @@
         const modal = document.createElement('div');
         modal.id = 'customerModal';
         modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        modal.style.backdropFilter = 'blur(4px)';
         modal.onclick = (e) => {
             if (e.target === modal) modal.remove();
         };
 
         modal.innerHTML = `
-            <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+            <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-xl font-bold text-secondary">Create New Customer</h3>
                     <button onclick="this.closest('#customerModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1277,12 +1470,14 @@
         const modal = document.createElement('div');
         modal.id = 'agentModal';
         modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        modal.style.backdropFilter = 'blur(4px)';
         modal.onclick = (e) => {
             if (e.target === modal) modal.remove();
         };
 
         modal.innerHTML = `
-            <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+            <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-xl font-bold text-secondary">Create New Agent</h3>
                     <button onclick="this.closest('#agentModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1368,12 +1563,14 @@
         const modal = document.createElement('div');
         modal.id = 'assignModal';
         modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        modal.style.backdropFilter = 'blur(4px)';
         modal.onclick = (e) => {
             if (e.target === modal) modal.remove();
         };
 
         modal.innerHTML = `
-            <div class="bg-white rounded-2xl max-w-md w-full shadow-xl p-6">
+            <div class="bg-white rounded-2xl max-w-md w-full shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-xl font-bold text-secondary">Assign Errand</h3>
                     <button onclick="this.closest('#assignModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1442,6 +1639,8 @@
             const modal = document.createElement('div');
             modal.id = 'viewCustomerModal';
             modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
@@ -1461,7 +1660,7 @@
             `).join('') || '<p class="text-slate-400">No errands found</p>';
 
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+                <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xl font-bold text-secondary">Customer Details</h3>
                         <button onclick="this.closest('#viewCustomerModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1545,6 +1744,8 @@
             const modal = document.createElement('div');
             modal.id = 'viewAgentModal';
             modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
@@ -1571,7 +1772,7 @@
             };
 
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+                <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xl font-bold text-secondary">Agent Details</h3>
                         <button onclick="this.closest('#viewAgentModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1660,6 +1861,8 @@
             const modal = document.createElement('div');
             modal.id = 'viewErrandModal';
             modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
@@ -1674,7 +1877,7 @@
             };
 
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+                <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xl font-bold text-secondary">Errand Details</h3>
                         <button onclick="this.closest('#viewErrandModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1776,12 +1979,14 @@
             const modal = document.createElement('div');
             modal.id = 'editCustomerModal';
             modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
 
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+                <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xl font-bold text-secondary">Edit Customer</h3>
                         <button onclick="this.closest('#editCustomerModal').remove()" class="text-slate-400 hover:text-primary">
@@ -1869,15 +2074,36 @@
             confirmText: 'Delete',
             destructive: true,
             onConfirm: async () => {
+                // MODAL IS REMOVED FIRST (handled in createCustomConfirmModal)
+                // Then this callback executes
+                
                 try {
+                    // Show loading overlay
                     showLoading('Deleting customer...');
-                    await deleteCustomer(customerId);
-                    showToast('Customer deleted successfully', 'success');
-                    await refreshCurrentTab();
-                } catch (error) {
-                    showToast(error.message, 'error');
-                } finally {
+                    
+                    // Perform the delete operation
+                    const result = await apiDeleteCustomer(customerId);
+                    console.log('Delete result:', result);
+                    
+                    // Hide loading
                     hideLoading();
+                    
+                    // Show success message
+                    showToast('Customer deleted successfully', 'success');
+                    
+                    // Small delay to ensure toast is visible
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Refresh the page
+                    await refreshCurrentTab();
+                    
+                } catch (error) {
+                    // Hide loading on error
+                    hideLoading();
+                    
+                    // Show error message
+                    showToast(error.message || 'Failed to delete customer', 'error');
+                    console.error('Delete error:', error);
                 }
             }
         });
@@ -1896,12 +2122,14 @@
             const modal = document.createElement('div');
             modal.id = 'editAgentModal';
             modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
 
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6">
+                <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xl font-bold text-secondary">Edit Agent</h3>
                         <button onclick="this.closest('#editAgentModal').remove()" class="text-slate-400 hover:text-primary">
@@ -2018,15 +2246,35 @@
             confirmText: 'Delete',
             destructive: true,
             onConfirm: async () => {
+                // MODAL IS REMOVED FIRST (handled in createCustomConfirmModal)
+                // Then this callback executes
+                
                 try {
+                    // Show loading overlay
                     showLoading('Deleting agent...');
-                    await deleteAgent(agentId);
-                    showToast('Agent deleted successfully', 'success');
-                    await refreshCurrentTab();
-                } catch (error) {
-                    showToast(error.message, 'error');
-                } finally {
+                    
+                    // Perform the delete operation
+                    await apiDeleteAgent(agentId);
+                    
+                    // Hide loading
                     hideLoading();
+                    
+                    // Show success message
+                    showToast('Agent deleted successfully', 'success');
+                    
+                    // Small delay to ensure toast is visible
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Refresh the page
+                    await refreshCurrentTab();
+                    
+                } catch (error) {
+                    // Hide loading on error
+                    hideLoading();
+                    
+                    // Show error message
+                    showToast(error.message || 'Failed to delete agent', 'error');
+                    console.error('Delete error:', error);
                 }
             }
         });
@@ -2035,6 +2283,20 @@
     // ==================== PAGE MANAGEMENT ====================
 
     async function refreshCurrentTab() {
+        console.log('Refreshing current tab:', currentTab);
+        
+        // Reset pagination if needed
+        if (currentTab === 'customers') {
+            currentPage = 1;
+            searchQuery = '';
+        } else if (currentTab === 'agents') {
+            currentPage = 1;
+            currentFilters = {};
+        } else if (currentTab === 'errands') {
+            currentPage = 1;
+            currentFilters = {};
+        }
+        
         await renderPage(currentTab);
     }
 
@@ -2046,17 +2308,25 @@
 
     async function renderPage(tab) {
         showLoading();
+        console.log(`Rendering page: ${tab}, page: ${currentPage}`);
         
         try {
-            // Fetch data based on tab
+            // Clear existing data
             if (tab === "overview") {
+                stats = null;
                 stats = await fetchDashboardStats();
             } else if (tab === "customers") {
+                customers = [];
                 await fetchCustomers(currentPage, searchQuery);
+                console.log(`Fetched ${customers.length} customers`);
             } else if (tab === "agents") {
+                agents = [];
                 await fetchAgents(currentPage, currentFilters);
+                console.log(`Fetched ${agents.length} agents`);
             } else if (tab === "errands") {
+                errands = [];
                 await fetchErrands(currentPage, currentFilters);
+                console.log(`Fetched ${errands.length} errands`);
             }
             
             let html = "";
@@ -2072,6 +2342,9 @@
             if (tab === "customers") attachCustomerEvents();
             if (tab === "agents") attachAgentEvents();
             if (tab === "errands") attachErrandEvents();
+            
+            // Force a reflow to ensure UI updates
+            pageContainer.offsetHeight;
             
         } catch (error) {
             console.error('Error rendering page:', error);
