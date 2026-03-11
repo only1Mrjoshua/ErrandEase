@@ -1,3 +1,4 @@
+<!-- agent-dashboard.html - Updated with shared UI feedback system -->
 <!doctype html>
 <html lang="en">
   <head>
@@ -291,7 +292,7 @@
     <div
       id="actionModal"
       class="fixed inset-0 z-[100] modal-backdrop hidden items-end md:items-center justify-center p-4"
-      onclick="if (event.target === this) closeActionModal();"
+      onclick="if (event.target === this) window.errandEaseUI?.closeModal();"
     >
       <div
         class="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto shadow-xl p-6"
@@ -300,7 +301,7 @@
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-xl font-bold text-secondary">Errand details</h3>
           <button
-            onclick="closeActionModal()"
+            onclick="window.errandEaseUI?.closeModal()"
             class="text-slate-400 hover:text-primary"
           >
             <span class="material-symbols-outlined">close</span>
@@ -311,6 +312,7 @@
     </div>
     <!-- Scripts -->
     <script src="js/config.js"></script>
+    <script src="js/ui-feedback.js"></script>
     <script src="js/agent-dashboard.js"></script>
     <!-- bottom padding for mobile -->
     <div class="h-16 md:h-0"></div>

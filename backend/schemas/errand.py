@@ -54,6 +54,7 @@ class ErrandListResponse(BaseModel):
     date_requested: Optional[datetime]
     pickup: str
     delivery: str
+    assigned_agent_name: Optional[str] = None  # ADD THIS LINE
     
     class Config:
         from_attributes = True

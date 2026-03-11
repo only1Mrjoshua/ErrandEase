@@ -1,4 +1,4 @@
-// customer-dashboard.js - Production version with real API integration and completion verification
+// customer-dashboard.js - Updated with unified UI feedback system
 (function() {
     // Guard to prevent double initialization
     if (window.customerDashboardInitialized) {
@@ -319,18 +319,6 @@
         `;
     }
 
-    function showSuccess(message) {
-        // Create temporary toast
-        const toast = document.createElement('div');
-        toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg z-50 animate-fade-in-down';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
-    }
-
     // ==================== COMPLETION VERIFICATION UI ====================
 
     async function checkAndShowPendingConfirmations() {
@@ -340,11 +328,8 @@
             console.log('Pending confirmations:', pending);
             
             if (pending && pending.length > 0) {
-                // Show banner notification
                 showPendingConfirmationsNotification(pending);
                 
-                // Automatically show the first pending errand modal
-                // But only if not already showing one
                 if (!document.getElementById('completionModal')) {
                     showCompletionModal(pending[0]);
                 }
@@ -355,7 +340,6 @@
     }
 
     function showPendingConfirmationsNotification(pendingErrands) {
-        // Remove existing banner if any
         const existingBanner = document.getElementById('pendingConfirmationsBanner');
         if (existingBanner) existingBanner.remove();
 
@@ -394,7 +378,6 @@
         content.appendChild(viewBtn);
         banner.appendChild(content);
         
-        // Insert at top of page container
         if (pageContainer && pageContainer.firstChild) {
             pageContainer.insertBefore(banner, pageContainer.firstChild);
         } else if (pageContainer) {
@@ -403,7 +386,6 @@
     }
 
     function showCompletionModal(errand) {
-        // Remove any existing modal
         const existingModal = document.getElementById('completionModal');
         if (existingModal) existingModal.remove();
 
@@ -468,24 +450,21 @@
         
         document.body.appendChild(modal);
         
-        // Handle Yes button
         document.getElementById('confirmYesBtn').addEventListener('click', async () => {
             await handleCompletionConfirmation(errand.id, true);
             modal.remove();
         });
         
-        // Handle No button - show rejection section
         document.getElementById('confirmNoBtn').addEventListener('click', () => {
             document.getElementById('rejectionSection').classList.remove('hidden');
             document.getElementById('confirmYesBtn').disabled = true;
             document.getElementById('confirmNoBtn').disabled = true;
         });
         
-        // Handle rejection submit
         document.getElementById('submitRejectionBtn').addEventListener('click', async () => {
             const reason = document.getElementById('rejectionReason').value.trim();
             if (!reason) {
-                alert('Please provide a reason');
+                window.errandEaseUI.showToast('Please provide a reason', 'warning');
                 return;
             }
             
@@ -501,27 +480,22 @@
             const result = await submitCompletionConfirmation(errandId, confirmed, rejectionReason);
             
             if (confirmed) {
-                showSuccess('Thank you for confirming! The errand is now marked as completed.');
+                window.errandEaseUI.showToast('Thank you for confirming! The errand is now marked as completed.', 'success');
             } else {
-                showSuccess('Your report has been submitted. The agent has been blocked and our team will investigate.');
+                window.errandEaseUI.showToast('Your report has been submitted. The agent has been blocked and our team will investigate.', 'success');
             }
             
-            // Refresh errands data
             await loadErrands();
             
-            // Remove banner if exists
             const banner = document.getElementById('pendingConfirmationsBanner');
             if (banner) banner.remove();
             
-            // Check for more pending confirmations
             await checkAndShowPendingConfirmations();
-            
-            // Refresh current tab
             await renderPage(currentTab);
             
         } catch (error) {
             console.error('Confirmation error:', error);
-            showError(error.message || 'Failed to process confirmation');
+            window.errandEaseUI.showToast(error.message || 'Failed to process confirmation', 'error');
         } finally {
             hideLoading();
         }
@@ -666,7 +640,6 @@
             
             const statusClass = statusColors[e.status] || 'bg-slate-100 text-slate-700';
             
-            // Add highlight for awaiting confirmation
             const awaitingHighlight = e.status === 'awaiting_confirmation' ? 'ring-2 ring-amber-300 ring-opacity-50 bg-amber-50/30' : '';
             
             cards += `
@@ -867,19 +840,17 @@
             
             const newErrand = await createErrand(formData);
             
-            // Reset form
             document.getElementById('errandForm').reset();
             document.getElementById('budget').value = '3000';
             updateCostPreview();
             
-            showSuccess('✅ Errand requested successfully!');
+            window.errandEaseUI.showToast('✅ Errand requested successfully!', 'success');
             
-            // Refresh ongoing errands and switch tab
             await loadErrands();
             setActiveTab('ongoing');
             
         } catch (error) {
-            alert(error.message || 'Failed to create errand. Please try again.');
+            window.errandEaseUI.showToast(error.message || 'Failed to create errand. Please try again.', 'error');
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
@@ -901,7 +872,7 @@
     async function showErrandDetails(errandId) {
         const errand = await fetchErrandDetails(errandId);
         if (!errand) {
-            alert('Could not load errand details');
+            window.errandEaseUI.showToast('Could not load errand details', 'error');
             return;
         }
         
@@ -944,7 +915,6 @@
         modalOverlay.classList.remove("hidden");
         modalOverlay.classList.add("flex");
         
-        // Handle modal confirmation buttons
         if (errand.status === 'awaiting_confirmation') {
             document.getElementById('modalConfirmYesBtn')?.addEventListener('click', async () => {
                 closeModal();
@@ -953,30 +923,31 @@
             
             document.getElementById('modalConfirmNoBtn')?.addEventListener('click', async () => {
                 closeModal();
-                // Show full confirmation modal
                 showCompletionModal(errand);
             });
         }
     }
 
     async function handleCancelErrand(errandId) {
-        if (!confirm('Are you sure you want to cancel this errand? This action cannot be undone.')) {
-            return;
-        }
-        
-        try {
-            await cancelErrand(errandId);
-            showSuccess('Errand cancelled successfully');
-            await loadErrands();
-            
-            // Refresh current tab
-            if (currentTab === 'ongoing') {
-                await renderPage('ongoing');
-                attachOngoingEvents();
+        window.errandEaseUI.showDestructiveConfirm({
+            title: 'Cancel Errand',
+            message: 'Are you sure you want to cancel this errand? This action cannot be undone.',
+            confirmText: 'Yes, Cancel',
+            onConfirm: async () => {
+                try {
+                    await cancelErrand(errandId);
+                    window.errandEaseUI.showToast('Errand cancelled successfully', 'success');
+                    await loadErrands();
+                    
+                    if (currentTab === 'ongoing') {
+                        await renderPage('ongoing');
+                        attachOngoingEvents();
+                    }
+                } catch (error) {
+                    window.errandEaseUI.showToast(error.message || 'Failed to cancel errand', 'error');
+                }
             }
-        } catch (error) {
-            alert(error.message || 'Failed to cancel errand');
-        }
+        });
     }
 
     // ==================== PAGE MANAGEMENT ====================
@@ -991,7 +962,6 @@
             ongoingErrands = ongoing;
             historyErrands = history;
             
-            // Log for debugging
             const awaitingConfirmation = ongoing.filter(e => e.status === 'awaiting_confirmation');
             if (awaitingConfirmation.length > 0) {
                 console.log('Found errands awaiting confirmation:', awaitingConfirmation);
@@ -1006,7 +976,6 @@
         showLoading();
         
         try {
-            // Load fresh data
             await loadErrands();
             
             let html = "";
@@ -1017,7 +986,6 @@
             
             pageContainer.innerHTML = html;
             
-            // Attach events based on tab
             if (tab === "request") attachRequestEvents();
             if (tab === "ongoing") attachOngoingEvents();
             if (tab === "history") attachHistoryEvents();
@@ -1100,7 +1068,6 @@
     async function setActiveTab(tabId) {
         currentTab = tabId;
         
-        // Update bottom nav active styles
         bottomNavItems.forEach((item) => {
             const tab = item.getAttribute("data-tab");
             if (tab === tabId) {
@@ -1112,7 +1079,6 @@
             }
         });
         
-        // Update sidebar links active
         sidebarLinks.forEach((link) => {
             const tab = link.getAttribute("data-tab");
             if (tab === tabId) {
@@ -1126,7 +1092,6 @@
         
         await renderPage(tabId);
         
-        // Check for pending confirmations when switching to ongoing tab
         if (tabId === 'ongoing') {
             await checkAndShowPendingConfirmations();
         }
@@ -1158,122 +1123,6 @@
         }
     }
 
-    function ensureLogoutModal() {
-        let overlay = document.getElementById("logoutModalOverlay");
-        if (overlay) return overlay;
-    
-        overlay = document.createElement("div");
-        overlay.id = "logoutModalOverlay";
-        overlay.className = "fixed inset-0 z-[200] hidden items-center justify-center p-4";
-        
-        const backdrop = document.createElement("div");
-        backdrop.className = "absolute inset-0 bg-black/40 backdrop-blur-[2px]";
-        
-        const card = document.createElement("div");
-        card.className = "relative w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden";
-        
-        const cardContent = document.createElement("div");
-        cardContent.className = "p-5";
-        
-        const flexDiv = document.createElement("div");
-        flexDiv.className = "flex items-start gap-3";
-        
-        const iconDiv = document.createElement("div");
-        iconDiv.className = "w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-red-600";
-        
-        const iconSpan = document.createElement("span");
-        iconSpan.className = "material-symbols-outlined";
-        iconSpan.textContent = "logout";
-        iconDiv.appendChild(iconSpan);
-        
-        const textDiv = document.createElement("div");
-        textDiv.className = "flex-1";
-        
-        const title = document.createElement("h3");
-        title.className = "text-lg font-bold text-slate-900";
-        title.textContent = "Log out?";
-        
-        const desc = document.createElement("p");
-        desc.className = "text-sm text-slate-600 mt-1";
-        desc.textContent = "This will clear your session on this device.";
-        
-        textDiv.appendChild(title);
-        textDiv.appendChild(desc);
-        
-        flexDiv.appendChild(iconDiv);
-        flexDiv.appendChild(textDiv);
-        
-        const buttonsDiv = document.createElement("div");
-        buttonsDiv.className = "mt-5 flex gap-3";
-        
-        const cancelBtn = document.createElement("button");
-        cancelBtn.id = "logoutCancelBtn";
-        cancelBtn.className = "flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50";
-        cancelBtn.textContent = "Cancel";
-        
-        const confirmBtn = document.createElement("button");
-        confirmBtn.id = "logoutConfirmBtn";
-        confirmBtn.className = "flex-1 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700";
-        confirmBtn.textContent = "Log out";
-        
-        buttonsDiv.appendChild(cancelBtn);
-        buttonsDiv.appendChild(confirmBtn);
-        
-        cardContent.appendChild(flexDiv);
-        cardContent.appendChild(buttonsDiv);
-        card.appendChild(cardContent);
-        overlay.appendChild(backdrop);
-        overlay.appendChild(card);
-    
-        document.body.appendChild(overlay);
-    
-        overlay.addEventListener("click", (e) => {
-            if (e.target === overlay || e.target === backdrop) {
-                hideLogoutModal();
-            }
-        });
-    
-        cancelBtn.addEventListener("click", hideLogoutModal);
-        confirmBtn.addEventListener("click", performLogout);
-    
-        return overlay;
-    }
-    
-    function showLogoutModal() {
-        const overlay = ensureLogoutModal();
-        overlay.classList.remove("hidden");
-        overlay.classList.add("flex");
-    }
-    
-    function hideLogoutModal() {
-        const overlay = document.getElementById("logoutModalOverlay");
-        if (!overlay) return;
-        overlay.classList.add("hidden");
-        overlay.classList.remove("flex");
-    }
-    
-    async function performLogout() {
-        const overlay = document.getElementById("logoutModalOverlay");
-        const confirmBtn = overlay?.querySelector("#logoutConfirmBtn");
-        const cancelBtn = overlay?.querySelector("#logoutCancelBtn");
-    
-        if (confirmBtn) {
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = "Logging out...";
-            confirmBtn.classList.add("opacity-80");
-        }
-        if (cancelBtn) cancelBtn.disabled = true;
-    
-        await callBackendLogout();
-        clearAuth();
-        window.location.href = getSignInUrl();
-    }
-    
-    function getSignInUrl() {
-        const p = window.location.pathname || "";
-        return p.includes("/frontend/") ? "/frontend/sign-in.html" : "/sign-in.html";
-    }
-    
     function injectLogoutButtonIntoSidebar() {
         const sidebar = document.getElementById("desktopSidebar");
         if (!sidebar) return;
@@ -1307,25 +1156,35 @@
     
         button.addEventListener("click", (e) => {
             e.preventDefault();
-            showLogoutModal();
+            performLogout();
         });
+    }
+
+    async function performLogout() {
+        window.errandEaseUI.showLogoutModal(async () => {
+            await callBackendLogout();
+            clearAuth();
+            window.location.href = getSignInUrl();
+        });
+    }
+    
+    function getSignInUrl() {
+        const p = window.location.pathname || "";
+        return p.includes("/frontend/") ? "/frontend/sign-in.html" : "/sign-in.html";
     }
 
     // ==================== INITIALIZATION ====================
 
     async function initializeDashboard() {
-        // Check authentication first
         const token = localStorage.getItem('access_token');
         if (!token) {
             redirectToSignIn();
             return;
         }
         
-        // Load user data
         await fetchCurrentUser();
         await updateGreeting();
         
-        // Set up event listeners
         hamburgerBtn.addEventListener("click", openSidebar);
         closeSidebarBtn.addEventListener("click", closeSidebar);
         
@@ -1337,7 +1196,6 @@
             if (e.target === modalOverlay) closeModal();
         });
         
-        // Desktop toggle
         let sidebarVisible = true;
         desktopToggleBtn.addEventListener("click", () => {
             if (sidebarVisible) {
@@ -1350,7 +1208,6 @@
             sidebarVisible = !sidebarVisible;
         });
 
-        // Nav listeners
         bottomNavItems.forEach((item) =>
             item.addEventListener("click", (e) =>
                 handleNavClick(e, item.getAttribute("data-tab"))
@@ -1363,7 +1220,6 @@
             )
         );
 
-        // Profile icon click
         if (profileIconLink) {
             profileIconLink.addEventListener("click", (e) => {
                 e.preventDefault();
@@ -1372,26 +1228,19 @@
             });
         }
 
-        // Logout button in profile tab (delegation)
         document.addEventListener('click', (e) => {
             if (e.target.id === 'logoutBtn') {
                 e.preventDefault();
-                showLogoutModal();
+                performLogout();
             }
         });
 
         injectLogoutButtonIntoSidebar();
 
-        // Load errands first
         await loadErrands();
-        
-        // CRITICAL: Check for pending confirmations immediately and show modal
         await checkAndShowPendingConfirmations();
-
-        // Initial tab
         await setActiveTab("request");
         
-        // Set up periodic check for pending confirmations (every 15 seconds)
         refreshInterval = setInterval(async () => {
             if (currentTab === 'ongoing' || currentTab === 'request') {
                 await checkAndShowPendingConfirmations();
@@ -1399,14 +1248,12 @@
         }, 15000);
     }
 
-    // Clean up interval on page unload
     window.addEventListener('beforeunload', () => {
         if (refreshInterval) {
             clearInterval(refreshInterval);
         }
     });
 
-    // Start everything
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeDashboard);
     } else {

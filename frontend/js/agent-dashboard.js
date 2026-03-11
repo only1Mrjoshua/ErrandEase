@@ -1,5 +1,4 @@
-// agent-dashboard.js - Complete agent dashboard with real API integration and blocked state
-
+// agent-dashboard.js - Updated with unified UI feedback system
 (function() {
     // Guard to prevent double initialization
     if (window.agentDashboardInitialized) {
@@ -112,7 +111,6 @@
             if (response && response.ok) {
                 const userData = await response.json();
                 
-                // Verify user is an agent
                 if (userData.role !== 'agent') {
                     console.error('User is not an agent:', userData.role);
                     redirectToCustomerDashboard();
@@ -122,7 +120,6 @@
                 currentUser = userData;
                 localStorage.setItem('user', JSON.stringify(userData));
                 
-                // Update greeting
                 updateGreeting();
                 
                 return userData;
@@ -131,7 +128,6 @@
             console.error('Error fetching user:', error);
         }
         
-        // Fallback to stored user
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             try {
@@ -167,7 +163,6 @@
             greetingEl.textContent = `👋 ${timeGreeting}, ${firstName}`;
         }
         
-        // Update sidebar footer
         const footerEl = document.querySelector('.p-4.border-t.border-slate-100.text-xs');
         if (footerEl && currentUser) {
             footerEl.textContent = `Agent · ${currentUser.name || 'Agent'}`;
@@ -365,15 +360,6 @@
         `;
     }
 
-    function showSuccess(message) {
-        // Use agentAuth notification if available
-        if (window.agentAuth && window.agentAuth.showNotification) {
-            window.agentAuth.showNotification(message, 'success');
-        } else {
-            alert(message);
-        }
-    }
-
     function formatTimeAgo(dateString) {
         if (!dateString) return 'Recently';
         
@@ -419,12 +405,10 @@
         actionModal.classList.remove("flex");
     }
 
-    // Make closeModal available globally for onclick handlers
     window.closeActionModal = closeModal;
 
     // ==================== RENDER FUNCTIONS ====================
 
-    // NEW: Render blocked account state
     function renderBlockedState(blockedReason) {
         pageContainer.innerHTML = `
             <div class="max-w-2xl mx-auto py-12">
@@ -470,19 +454,16 @@
             </div>
         `;
         
-        // Hide sidebar navigation
         const navLinks = document.querySelectorAll('.sidebar-link, .bottom-nav-item');
         navLinks.forEach(link => {
             link.style.pointerEvents = 'none';
             link.style.opacity = '0.5';
         });
         
-        // Hide counts
         if (availableCountEl) availableCountEl.textContent = '0';
         if (assignedCountEl) assignedCountEl.textContent = '0';
     }
 
-    // Render pending approval state
     function renderPendingApproval() {
         pageContainer.innerHTML = `
             <div class="max-w-2xl mx-auto py-12">
@@ -518,7 +499,6 @@
             </div>
         `;
         
-        // Hide sidebar counts since no real data
         if (availableCountEl) availableCountEl.textContent = '0';
         if (assignedCountEl) assignedCountEl.textContent = '0';
     }
@@ -537,7 +517,7 @@
         let cards = "";
         availableErrands.forEach((e) => {
             const timeAgo = formatTimeAgo(e.date_requested);
-            const isNew = (new Date() - new Date(e.date_requested)) < 30 * 60 * 1000; // 30 minutes
+            const isNew = (new Date() - new Date(e.date_requested)) < 30 * 60 * 1000;
 
             cards += `
                 <div class="bg-white rounded-xl p-5 border border-slate-100 shadow-sm card-hover relative" data-id="${e.id}">
@@ -589,12 +569,12 @@
             const badgeColors = {
                 'accepted': 'bg-blue-100 text-blue-700',
                 'in_progress': 'bg-purple-100 text-purple-700',
-                'awaiting_confirmation': 'bg-amber-100 text-amber-700'  // NEW
+                'awaiting_confirmation': 'bg-amber-100 text-amber-700'
             };
             const badgeText = {
                 'accepted': 'Pending Start',
                 'in_progress': 'In Progress',
-                'awaiting_confirmation': 'Awaiting Customer Confirmation'  // NEW
+                'awaiting_confirmation': 'Awaiting Customer Confirmation'
             };
             const badgeColor = badgeColors[e.status] || 'bg-slate-100 text-slate-700';
 
@@ -796,7 +776,7 @@
                     </p>
                     <div class="flex gap-2 mt-4">
                         <button id="confirmAcceptBtn" class="flex-1 bg-primary hover:bg-emerald-600 text-white py-3 rounded-xl font-bold">✅ Confirm Accept</button>
-                        <button onclick="closeActionModal()" class="flex-1 border border-slate-200 hover:bg-slate-50 py-3 rounded-xl font-medium">Cancel</button>
+                        <button onclick="window.errandEaseUI?.closeModal()" class="flex-1 border border-slate-200 hover:bg-slate-50 py-3 rounded-xl font-medium">Cancel</button>
                     </div>
                 </div>
             `;
@@ -809,16 +789,13 @@
                     showLoading();
                     
                     const result = await acceptErrand(errandId);
-                    showSuccess('Errand accepted successfully!');
+                    window.errandEaseUI.showToast('Errand accepted successfully!', 'success');
                     
-                    // Refresh data
                     await loadAllData();
-                    
-                    // Switch to assigned tab
                     setActiveTab('assigned');
                     
                 } catch (error) {
-                    alert(error.message || 'Failed to accept errand');
+                    window.errandEaseUI.showToast(error.message || 'Failed to accept errand', 'error');
                 } finally {
                     hideLoading();
                 }
@@ -826,7 +803,7 @@
 
         } catch (error) {
             console.error('Error in accept flow:', error);
-            alert('Failed to process request');
+            window.errandEaseUI.showToast('Failed to process request', 'error');
         }
     }
 
@@ -839,7 +816,7 @@
             console.log('Errand details received:', errand);
 
             if (!errand) {
-                alert('Could not load errand details - errand not found');
+                window.errandEaseUI.showToast('Could not load errand details - errand not found', 'error');
                 return;
             }
 
@@ -847,7 +824,7 @@
                 'pending': 'text-amber-600',
                 'accepted': 'text-blue-600',
                 'in_progress': 'text-purple-600',
-                'awaiting_confirmation': 'text-amber-600',  // NEW
+                'awaiting_confirmation': 'text-amber-600',
                 'completed': 'text-emerald-600',
                 'cancelled': 'text-slate-600'
             };
@@ -901,13 +878,13 @@
                         showLoading();
                         
                         await startErrand(errandId);
-                        showSuccess('Errand started!');
+                        window.errandEaseUI.showToast('Errand started!', 'success');
                         
                         await loadAllData();
                         setActiveTab('assigned');
                         
                     } catch (error) {
-                        alert(error.message || 'Failed to start errand');
+                        window.errandEaseUI.showToast(error.message || 'Failed to start errand', 'error');
                     } finally {
                         hideLoading();
                     }
@@ -919,13 +896,13 @@
                         showLoading();
                         
                         await completeErrand(errandId);
-                        showSuccess('Errand marked as complete! Waiting for customer confirmation.');
+                        window.errandEaseUI.showToast('Errand marked as complete! Waiting for customer confirmation.', 'success');
                         
                         await loadAllData();
                         setActiveTab('assigned');
                         
                     } catch (error) {
-                        alert(error.message || 'Failed to complete errand');
+                        window.errandEaseUI.showToast(error.message || 'Failed to complete errand', 'error');
                     } finally {
                         hideLoading();
                     }
@@ -934,22 +911,19 @@
 
         } catch (error) {
             console.error('Error loading errand details:', error);
-            alert('Could not load errand details: ' + (error.message || 'Unknown error'));
+            window.errandEaseUI.showToast('Could not load errand details: ' + (error.message || 'Unknown error'), 'error');
         } finally {
             hideLoading();
         }
     }
 
     async function handleLogout() {
-        if (window.agentAuth && window.agentAuth.signOut) {
-            await window.agentAuth.signOut();
-        } else {
-            // Fallback logout
+        window.errandEaseUI.showLogoutModal(async () => {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             localStorage.removeItem('user');
             redirectToSignIn();
-        }
+        });
     }
 
     // ==================== PAGE MANAGEMENT ====================
@@ -991,7 +965,6 @@
             
             pageContainer.innerHTML = html;
             
-            // Attach events
             if (tab === "available") attachAvailableEvents();
             if (tab === "assigned") attachAssignedEvents();
             
@@ -1072,30 +1045,25 @@
     // ==================== INITIALIZATION ====================
 
     async function initializeDashboard() {
-        // Check authentication
         const token = localStorage.getItem('access_token');
         if (!token) {
             redirectToSignIn();
             return;
         }
         
-        // Load user and verify role
         await fetchCurrentUser();
         if (!currentUser || currentUser.role !== 'agent') {
             redirectToSignIn();
             return;
         }
         
-        // Check verification status and account status before loading dashboard
         try {
             const response = await makeAuthenticatedRequest('/api/agent/verification/status');
             if (response && response.ok) {
                 const status = await response.json();
                 console.log('Account status:', status);
                 
-                // NEW: Check if account is blocked
                 if (status.account_status === 'blocked' || status.is_blocked) {
-                    // Redirect to blocked page
                     const blockedUrl = window.location.pathname.includes('/frontend/') 
                         ? '/frontend/agent-blocked.html'
                         : '/agent-blocked.html';
@@ -1104,36 +1072,29 @@
                 }
                 
                 if (status.verification_status === 'not_submitted') {
-                    // Redirect to verification page
                     const verificationUrl = window.location.pathname.includes('/frontend/') 
                         ? '/frontend/agent-verification.html'
                         : '/agent-verification.html';
                     window.location.href = verificationUrl;
                     return;
                 } else if (status.verification_status === 'pending') {
-                    // Render pending state instead of dashboard
                     renderPendingApproval();
                     
-                    // Set up minimal UI elements
                     hamburgerBtn?.addEventListener("click", openSidebar);
                     closeSidebarBtn?.addEventListener("click", closeSidebar);
                     
-                    // Nav listeners (they won't do much but need to exist)
                     bottomNavItems.forEach((item) =>
                         item.addEventListener("click", (e) => {
                             e.preventDefault();
-                            // Stay on pending view
                         })
                     );
                     
                     sidebarLinks.forEach((link) =>
                         link.addEventListener("click", (e) => {
                             e.preventDefault();
-                            // Stay on pending view
                         })
                     );
                     
-                    // Logout button delegation
                     document.addEventListener('click', (e) => {
                         if (e.target.id === 'logoutBtn') {
                             e.preventDefault();
@@ -1143,17 +1104,14 @@
                     
                     return;
                 } else if (status.verification_status === 'rejected') {
-                    // Show rejection message and redirect
-                    alert('Your verification was rejected: ' + (status.rejection_reason || 'Please resubmit your documents'));
+                    window.errandEaseUI.showToast('Your verification was rejected: ' + (status.rejection_reason || 'Please resubmit your documents'), 'error');
                     const verificationUrl = window.location.pathname.includes('/frontend/') 
                         ? '/frontend/agent-verification.html'
                         : '/agent-verification.html';
                     window.location.href = verificationUrl;
                     return;
                 }
-                // If approved, continue with normal dashboard
             } else {
-                // If can't get status, assume not verified
                 const verificationUrl = window.location.pathname.includes('/frontend/') 
                     ? '/frontend/agent-verification.html'
                     : '/agent-verification.html';
@@ -1166,11 +1124,9 @@
             return;
         }
         
-        // Set up event listeners for approved agents
         hamburgerBtn?.addEventListener("click", openSidebar);
         closeSidebarBtn?.addEventListener("click", closeSidebar);
         
-        // Nav listeners
         bottomNavItems.forEach((item) =>
             item.addEventListener("click", (e) =>
                 handleNavClick(e, item.getAttribute("data-tab"))
@@ -1183,7 +1139,6 @@
             )
         );
         
-        // Logout button delegation
         document.addEventListener('click', (e) => {
             if (e.target.id === 'logoutBtn') {
                 e.preventDefault();
@@ -1191,7 +1146,6 @@
             }
         });
         
-        // Start auto-refresh for available errands (every 30 seconds)
         refreshInterval = setInterval(async () => {
             if (currentTab === 'available') {
                 await loadAllData();
@@ -1201,18 +1155,15 @@
             }
         }, 30000);
         
-        // Initial render
         await setActiveTab("available");
     }
 
-    // Clean up interval on page unload
     window.addEventListener('beforeunload', () => {
         if (refreshInterval) {
             clearInterval(refreshInterval);
         }
     });
 
-    // Start
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeDashboard);
     } else {
