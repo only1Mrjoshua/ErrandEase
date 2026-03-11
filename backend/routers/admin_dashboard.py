@@ -925,81 +925,48 @@ async def delete_agent(
 ):
     logger.info(f"Attempting to delete agent with ID: {agent_id}")
     
-    # Clean the ID - remove any curly braces or quotes
-    clean_id = agent_id.strip('{}').strip('"').strip("'")
+    # First, find the agent profile to get the user_id
+    profile = None
     
-    # Try to find the agent
-    agent = None
+    # Try to find the profile by _id (if agent_id is the profile ID)
+    if validate_object_id(agent_id):
+        profile = agent_profiles_collection.find_one({"_id": ObjectId(agent_id)})
     
-    # Method 1: Try as ObjectId (if it's a valid 24-char hex string)
-    if len(clean_id) == 24 and all(c in '0123456789abcdefABCDEF' for c in clean_id):
-        try:
-            obj_id = ObjectId(clean_id)
-            agent = users_collection.find_one({
-                "_id": obj_id,
-                "role": "agent"
-            })
-            if agent:
-                logger.info(f"Found agent by ObjectId: {clean_id}")
-        except Exception as e:
-            logger.warning(f"Error creating ObjectId: {e}")
+    # If not found, try as user_id (in case agent_id is the user_id)
+    if not profile:
+        profile = agent_profiles_collection.find_one({"user_id": agent_id})
     
-    # Method 2: Try as string ID (in case IDs are stored as strings)
-    if not agent:
-        agent = users_collection.find_one({
-            "_id": clean_id,
-            "role": "agent"
-        })
-        if agent:
-            logger.info(f"Found agent by string ID: {clean_id}")
-    
-    # Method 3: Try searching by user_id in agent_profiles
-    if not agent:
-        profile = agent_profiles_collection.find_one({"user_id": clean_id})
-        if profile:
-            agent = users_collection.find_one({
-                "_id": ObjectId(profile["user_id"]),
-                "role": "agent"
-            })
-            if agent:
-                logger.info(f"Found agent via profile user_id: {clean_id}")
-    
-    # Method 4: Try with case-insensitive search (if IDs might be stored with different case)
-    if not agent and len(clean_id) == 24:
-        try:
-            # Try both uppercase and lowercase variations
-            variations = [clean_id.lower(), clean_id.upper()]
-            for variant in variations:
-                agent = users_collection.find_one({
-                    "_id": variant,
-                    "role": "agent"
-                })
-                if agent:
-                    logger.info(f"Found agent by variant: {variant}")
-                    break
-        except Exception:
-            pass
-
-    if not agent:
-        logger.error(f"Agent not found with ID: {agent_id}")
-        
-        # List all agents to help debug
-        all_agents = list(users_collection.find({"role": "agent"}, {"_id": 1, "email": 1}))
-        agent_ids = [str(a["_id"]) for a in all_agents]
-        logger.info(f"Available agent IDs: {agent_ids}")
-        
+    if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent with ID {agent_id} not found"
+            detail=f"Agent profile with ID {agent_id} not found"
         )
-
-    # Get the actual agent ID from the found agent
-    actual_agent_id = str(agent["_id"])
-    logger.info(f"Found agent with actual ID: {actual_agent_id}")
-
+    
+    # Get the actual user_id from the profile
+    user_id = profile["user_id"]
+    
+    # Find the user
+    try:
+        user = users_collection.find_one({
+            "_id": ObjectId(user_id),
+            "role": "agent"
+        })
+    except:
+        # If user_id is not a valid ObjectId, try as string
+        user = users_collection.find_one({
+            "_id": user_id,
+            "role": "agent"
+        })
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent user with ID {user_id} not found"
+        )
+    
     # Check for active errands
     assigned_errands = errands_collection.count_documents({
-        "assigned_agent_id": actual_agent_id,
+        "assigned_agent_id": user_id,
         "status": {"$in": ["accepted", "in_progress", "awaiting_confirmation"]}
     })
 
@@ -1010,11 +977,11 @@ async def delete_agent(
         )
 
     # Delete related data
-    refresh_tokens_collection.delete_many({"user_id": actual_agent_id})
-    agent_profiles_collection.delete_one({"user_id": actual_agent_id})
+    refresh_tokens_collection.delete_many({"user_id": user_id})
+    agent_profiles_collection.delete_one({"user_id": user_id})
 
     # Delete the user
-    result = users_collection.delete_one({"_id": agent["_id"]})
+    result = users_collection.delete_one({"_id": user["_id"]})
 
     if result.deleted_count == 0:
         raise HTTPException(
@@ -1022,7 +989,7 @@ async def delete_agent(
             detail="Failed to delete agent"
         )
 
-    logger.info(f"Admin {current_user['id']} deleted agent: {actual_agent_id}")
+    logger.info(f"Admin {current_user['id']} deleted agent: {user_id}")
 
     return {"message": "Agent deleted successfully", "success": True}
 
