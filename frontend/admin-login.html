@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Admin Login | ErrandEase</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="images/favicon.svg" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="images/apple-touch-icon.png"
+    />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+      }
+      .auth-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+      }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .animate-spin {
+        animation: spin 1s linear infinite;
+      }
+      .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(5px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+      }
+      .dark .loading-overlay {
+        background: rgba(15, 23, 42, 0.8);
+      }
+      .loading-overlay.active {
+        display: flex;
+      }
+      .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px 24px;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transform: translateX(400px);
+        transition: transform 0.3s ease;
+        z-index: 10000;
+        max-width: 400px;
+      }
+      .dark .notification {
+        background: #1e293b;
+        color: white;
+      }
+      .notification.show {
+        transform: translateX(0);
+      }
+      .notification.success {
+        border-left: 4px solid #10b981;
+      }
+      .notification.error {
+        border-left: 4px solid #ef4444;
+      }
+      .notification.info {
+        border-left: 4px solid #3b82f6;
+      }
+      .password-toggle {
+        cursor: pointer;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body class="bg-background-light text-slate-900 antialiased">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="text-center">
+        <div
+          class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"
+        ></div>
+        <p class="mt-4 text-slate-600" id="loadingMessage">Processing...</p>
+      </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <header class="w-full bg-transparent">
+      <nav
+        class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between"
+      >
+        <a
+          class="flex items-center gap-2 group cursor-pointer"
+          href="index.html"
+        >
+          <div class="bg-primary p-1.5 rounded-lg text-white">
+            <span class="material-symbols-outlined text-2xl">local_mall</span>
+          </div>
+          <span class="text-xl font-[800] tracking-tight text-secondary"
+            >ErrandEase</span
+          >
+        </a>
+        <span
+          class="bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-600"
+        >
+          Admin Portal
+        </span>
+      </nav>
+    </header>
+
+    <main class="flex-grow flex items-center justify-center px-6 py-12">
+      <div class="w-full max-w-[480px]">
+        <div
+          class="auth-card bg-white p-8 md:p-12 rounded-xl shadow-2xl shadow-slate-200 border border-slate-100"
+        >
+          <div class="text-center mb-10">
+            <div
+              class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4"
+            >
+              <span class="material-symbols-outlined text-3xl text-slate-700"
+                >admin_panel_settings</span
+              >
+            </div>
+            <h1 class="text-3xl font-[800] text-secondary mb-2">Admin Login</h1>
+            <p class="text-slate-500">
+              Secure access to ErrandEase admin panel
+            </p>
+          </div>
+
+          <form id="loginForm" class="space-y-6">
+            <!-- Username/Email Field -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">
+                Username or Email
+              </label>
+              <div class="relative">
+                <span
+                  class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  person
+                </span>
+                <input
+                  type="text"
+                  id="username"
+                  name="username"
+                  required
+                  placeholder="Enter your username or email"
+                  class="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:ring-2 focus:ring-primary/50 focus:border-primary transition"
+                  autocomplete="username"
+                />
+              </div>
+            </div>
+
+            <!-- Password Field -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">
+                Password
+              </label>
+              <div class="relative">
+                <span
+                  class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  lock
+                </span>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  required
+                  placeholder="Enter your password"
+                  class="w-full pl-10 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:ring-2 focus:ring-primary/50 focus:border-primary transition"
+                  autocomplete="current-password"
+                />
+                <button
+                  type="button"
+                  id="togglePassword"
+                  class="password-toggle absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <span class="material-symbols-outlined text-xl"
+                    >visibility</span
+                  >
+                </button>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button
+              type="submit"
+              class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              id="loginBtn"
+            >
+              Sign In to Admin Dashboard
+            </button>
+          </form>
+
+          <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+            <p class="text-xs text-slate-400">
+              Authorized personnel only. All access is logged and monitored.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="py-8 text-center">
+      <p class="text-xs text-slate-400">
+        © 2026 ErrandEase Marketplace. Secure admin portal.
+      </p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/admin-login.js"></script>
+  </body>
+</html>

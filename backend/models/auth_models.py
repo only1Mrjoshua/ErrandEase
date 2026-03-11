@@ -1,14 +1,13 @@
 from datetime import datetime
 from typing import Optional, List, Any
-from pydantic import BaseModel, EmailStr, Field, GetJsonSchemaHandler
-from pydantic_core import CoreSchema
+from pydantic import BaseModel, EmailStr, Field
 from bson import ObjectId
 
 class PyObjectId:
     """Custom type for handling MongoDB ObjectId in Pydantic v2"""
     
     @classmethod
-    def __get_pydantic_core_schema__(cls, source_type: Any, handler) -> CoreSchema:
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler) -> Any:
         """Define how to validate and serialize ObjectId"""
         from pydantic_core import core_schema
         
@@ -29,6 +28,11 @@ class AuthIdentity(BaseModel):
     provider: str  # "google", "email", etc.
     provider_sub: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class User(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -38,7 +42,7 @@ class User(BaseModel):
     picture: Optional[str] = None
     password_hash: Optional[str] = None  # Only for email/password users
     auth_identities: List[AuthIdentity] = []
-    role: str = "customer"  # customer, provider, admin
+    role: str = "customer"  # customer, agent, admin
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
@@ -69,6 +73,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: dict
+    
+    class Config:
+        from_attributes = True
 
 class RefreshToken(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -86,6 +93,9 @@ class RefreshToken(BaseModel):
 class GoogleTokenRequest(BaseModel):
     code: str
     state: str
+    
+    class Config:
+        from_attributes = True
 
 class GoogleUserInfo(BaseModel):
     email: str
@@ -93,3 +103,6 @@ class GoogleUserInfo(BaseModel):
     picture: Optional[str] = None
     sub: str
     email_verified: bool
+    
+    class Config:
+        from_attributes = True

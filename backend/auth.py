@@ -7,7 +7,7 @@ from jose import jwt
 import secrets
 from typing import Optional
 import httpx
-from passlib.context import CryptContext
+import bcrypt  # Add this import
 import uuid
 import logging
 
@@ -25,8 +25,28 @@ logger = logging.getLogger(__name__)
 # Security scheme for bearer token
 security = HTTPBearer()
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Remove passlib - we'll use bcrypt directly
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt with automatic truncation to 72 bytes"""
+    if not password:
+        raise ValueError("Password cannot be empty")
+    
+    # Truncate to 72 bytes if longer (bcrypt limit)
+    password_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password against hash with automatic truncation"""
+    try:
+        # Truncate plain password to 72 bytes for consistency
+        plain_bytes = plain_password.encode('utf-8')[:72]
+        hashed_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(plain_bytes, hashed_bytes)
+    except Exception as e:
+        logger.error(f"Password verification error: {e}")
+        return False
 
 # Simple in-memory rate limiting
 rate_limit_store = {}

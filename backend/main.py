@@ -12,7 +12,14 @@ from config import settings
 from database import client
 import auth
 
-from routers import errands, agent_errands, agent_verification, admin_agents, customer_completion
+from routers import (
+    errands, 
+    agent_errands, 
+    agent_verification, 
+    admin_agents, 
+    customer_completion,
+    admin_dashboard  # NEW
+)
 
 # Configure logging
 logging.basicConfig(
@@ -57,7 +64,8 @@ app.include_router(errands.router)
 app.include_router(agent_errands.router)
 app.include_router(agent_verification.router)
 app.include_router(admin_agents.router)
-app.include_router(customer_completion.router)  # NEW
+app.include_router(customer_completion.router)
+app.include_router(admin_dashboard.router)  # NEW
 
 @app.get("/")
 async def root():
