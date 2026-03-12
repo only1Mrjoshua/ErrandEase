@@ -1,4 +1,4 @@
-// admin-dashboard.js - Complete admin dashboard with unified UI feedback system
+// admin-dashboard.js - Complete admin dashboard with verification documents viewer
 
 (function() {
     // Guard to prevent double initialization
@@ -51,6 +51,82 @@
     const customersCountEl = document.getElementById("customersCount");
     const agentsCountEl = document.getElementById("agentsCount");
     const errandsCountEl = document.getElementById("errandsCount");
+
+    // ==================== HELPER FUNCTIONS ====================
+    
+    function formatFileSize(bytes) {
+        if (!bytes) return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // PDF viewing function - opens in new tab with proper PDF viewer
+    function viewPDF(url, label) {
+        // For Cloudinary PDFs, we need to ensure they open in a PDF viewer
+        if (url.includes('cloudinary')) {
+            // Cloudinary can serve PDFs with proper content-type
+            window.open(url, '_blank');
+        } else {
+            window.open(url, '_blank');
+        }
+    }
+
+    // PDF download function with proper filename
+    async function downloadPDF(url, label, type, agentId) {
+        try {
+            showLoading('Preparing download...');
+            
+            // Create proper filename
+            let filename = '';
+            if (type === 'proof_of_address') {
+                filename = `proof_of_address_${agentId}.pdf`;
+            } else if (type === 'passport') {
+                filename = `passport_photo_${agentId}.pdf`;
+            } else if (type === 'nin_card') {
+                filename = `nin_card_${agentId}.pdf`;
+            } else {
+                filename = `${label.toLowerCase().replace(/\s+/g, '_')}_${agentId}.pdf`;
+            }
+            
+            // Fetch the file with authentication
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to download file');
+            }
+            
+            // Get the blob
+            const blob = await response.blob();
+            
+            // Create download link
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            // Clean up
+            window.URL.revokeObjectURL(downloadUrl);
+            
+            showToast('Download started', 'success');
+            
+        } catch (error) {
+            console.error('Download error:', error);
+            showToast('Failed to download file. Try opening in browser instead.', 'error');
+            
+            // Fallback: open in browser
+            window.open(url, '_blank');
+        } finally {
+            hideLoading();
+        }
+    }
 
     // ==================== AUTH & API HELPERS ====================
 
@@ -383,7 +459,6 @@
         }`;
         confirmBtn.textContent = options.confirmText || 'Confirm';
 
-        // FIX: Change this to async
         confirmBtn.onclick = async (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -664,6 +739,47 @@
         } catch (error) {
             console.error('Error fetching agent errands:', error);
             return [];
+        }
+    }
+
+    // ==================== FETCH VERIFICATION DOCUMENTS ====================
+    
+    async function fetchVerificationDocuments(agentId) {
+        try {
+            console.log('Fetching verification documents for agent:', agentId);
+            const response = await makeAuthenticatedRequest(`/api/admin/agents/${agentId}/verification-documents`);
+            if (response && response.ok) {
+                const data = await response.json();
+                console.log('Verification documents response:', data);
+                
+                // For each document, try to get file size (if not provided by backend)
+                if (data.documents) {
+                    for (let doc of data.documents) {
+                        if (!doc.file_size) {
+                            try {
+                                // Try to get file size via HEAD request
+                                const headResponse = await fetch(doc.url, { method: 'HEAD' });
+                                if (headResponse.ok) {
+                                    const size = headResponse.headers.get('content-length');
+                                    if (size) {
+                                        doc.file_size = parseInt(size);
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('Could not get file size for:', doc.url);
+                            }
+                        }
+                    }
+                }
+                
+                return data;
+            } else if (response) {
+                console.error('Error response:', response.status, await response.text());
+            }
+            return null;
+        } catch (error) {
+            console.error('Error fetching verification documents:', error);
+            return null;
         }
     }
 
@@ -1446,6 +1562,9 @@
                             <button onclick="window.adminDashboard?.viewAgent('${escapeHtml(actionId)}')" class="text-primary hover:text-emerald-600" title="View">
                                 <span class="material-symbols-outlined text-lg">visibility</span>
                             </button>
+                            <button onclick="window.adminDashboard?.viewVerificationDocuments('${escapeHtml(actionId)}')" class="text-purple-600 hover:text-purple-700" title="View Verification Documents">
+                                <span class="material-symbols-outlined text-lg">folder</span>
+                            </button>
                             <button onclick="window.adminDashboard?.editAgent('${escapeHtml(actionId)}')" class="text-blue-600 hover:text-blue-700" title="Edit">
                                 <span class="material-symbols-outlined text-lg">edit</span>
                             </button>
@@ -1457,6 +1576,193 @@
                 </tr>
             `;
         }).join('');
+    }
+
+    // ==================== VIEW VERIFICATION DOCUMENTS ====================
+    
+    async function viewVerificationDocuments(agentId) {
+        try {
+            showLoading('Loading verification documents...');
+            
+            const docsData = await fetchVerificationDocuments(agentId);
+            
+            if (!docsData) {
+                showToast('Failed to load verification documents', 'error');
+                return;
+            }
+
+            if (!docsData.documents || docsData.documents.length === 0) {
+                showToast('No verification documents found for this agent', 'info');
+                hideLoading();
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'verificationDocsModal';
+            modal.className = 'fixed inset-0 z-[200] modal-backdrop flex items-center justify-center p-4';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.backdropFilter = 'blur(4px)';
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+
+            // Generate document cards
+            const documentsHtml = docsData.documents.map(doc => {
+                const isPdf = doc.url.toLowerCase().endsWith('.pdf') || doc.is_pdf || doc.type === 'proof_of_address';
+                const fileExtension = doc.url.split('.').pop().toLowerCase();
+                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension);
+                
+                // Determine document type for filename
+                const docType = doc.type || (doc.label || '').toLowerCase().replace(/\s+/g, '_');
+                
+                return `
+                    <div class="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 class="font-medium text-sm text-secondary">${escapeHtml(doc.label)}</h4>
+                                <p class="text-xs text-slate-400 mt-0.5">
+                                    ${doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}
+                                </p>
+                            </div>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                isPdf ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                            }">
+                                ${isPdf ? 'PDF' : (isImage ? 'Image' : 'File')}
+                            </span>
+                        </div>
+                        
+                        <div class="bg-slate-50 rounded-lg p-4 flex flex-col items-center justify-center min-h-[120px]">
+                            ${isPdf ? `
+                                <div class="text-center">
+                                    <div class="mb-3">
+                                        <span class="material-symbols-outlined text-5xl text-red-500">picture_as_pdf</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mb-3">
+                                        PDF Document • ${formatFileSize(doc.file_size)}
+                                    </p>
+                                    <div class="flex gap-2 justify-center">
+                                        <button onclick="window.adminDashboard?.viewPDF('${escapeHtml(doc.url)}', '${escapeHtml(doc.label)}')" 
+                                                class="inline-flex items-center gap-1 bg-primary text-white text-xs px-4 py-2 rounded-lg hover:bg-emerald-600 transition-colors">
+                                            <span class="material-symbols-outlined text-sm">visibility</span>
+                                            View PDF
+                                        </button>
+                                        <button onclick="window.adminDashboard?.downloadPDF('${escapeHtml(doc.url)}', '${escapeHtml(doc.label)}', '${escapeHtml(doc.type)}', '${escapeHtml(docsData.agent_id)}')" 
+                                                class="inline-flex items-center gap-1 bg-slate-200 text-slate-700 text-xs px-4 py-2 rounded-lg hover:bg-slate-300 transition-colors">
+                                            <span class="material-symbols-outlined text-sm">download</span>
+                                            Download
+                                        </button>
+                                    </div>
+                                </div>
+                            ` : isImage ? `
+                                <div class="relative group w-full">
+                                    <img src="${escapeHtml(doc.url)}" 
+                                        alt="${escapeHtml(doc.label)}" 
+                                        class="max-h-40 max-w-full mx-auto object-contain rounded cursor-pointer transition-transform group-hover:scale-105" 
+                                        onclick="window.open('${escapeHtml(doc.url)}', '_blank')">
+                                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all flex items-center justify-center rounded">
+                                        <span class="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 text-3xl">zoom_in</span>
+                                    </div>
+                                </div>
+                                <div class="mt-3 flex justify-center">
+                                    <a href="${escapeHtml(doc.url)}" 
+                                    download="${escapeHtml(doc.label || 'image')}.${fileExtension}"
+                                    class="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                        <span class="material-symbols-outlined text-sm">download</span>
+                                        Download Image
+                                    </a>
+                                </div>
+                            ` : `
+                                <div class="text-center">
+                                    <span class="material-symbols-outlined text-5xl text-slate-400">description</span>
+                                    <p class="text-xs text-slate-500 mt-2 mb-3">${fileType}</p>
+                                    <a href="${escapeHtml(doc.url)}" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-1 bg-primary text-white text-xs px-4 py-2 rounded-lg hover:bg-emerald-600 transition-colors">
+                                        <span class="material-symbols-outlined text-sm">download</span>
+                                        Download File
+                                    </a>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add NIN number display if available
+            const ninHtml = docsData.nin_number ? `
+                <div class="mb-4 p-3 bg-blue-50 rounded-lg">
+                    <p class="text-sm">
+                        <span class="font-medium">NIN Number:</span> 
+                        <span class="font-mono">${escapeHtml(docsData.nin_number)}</span>
+                    </p>
+                </div>
+            ` : '';
+
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6" style="animation: modalFadeIn 0.2s ease-out;">
+                    <div class="flex justify-between items-center mb-4 sticky top-0 bg-white pb-2 border-b">
+                        <h3 class="text-xl font-bold text-secondary">Verification Documents</h3>
+                        <button onclick="this.closest('#verificationDocsModal').remove()" class="text-slate-400 hover:text-primary p-1">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                    
+                    <div class="mb-6 p-4 bg-slate-50 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm">
+                                <span class="font-medium">Verification Status:</span> 
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ml-2 ${
+                                    docsData.verification_status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                                    docsData.verification_status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                    docsData.verification_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                    'bg-slate-100 text-slate-600'
+                                }">
+                                    ${docsData.verification_status ? docsData.verification_status.replace('_', ' ') : 'N/A'}
+                                </span>
+                            </p>
+                            ${docsData.submitted_at ? `
+                                <p class="text-xs text-slate-500">
+                                    Submitted: ${new Date(docsData.submitted_at).toLocaleString()}
+                                </p>
+                            ` : ''}
+                        </div>
+                        ${docsData.rejection_reason ? `
+                            <div class="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                                <p class="text-xs text-red-800">
+                                    <span class="font-medium">Rejection Reason:</span> ${escapeHtml(docsData.rejection_reason)}
+                                </p>
+                            </div>
+                        ` : ''}
+                        ${docsData.verified_at ? `
+                            <p class="text-xs text-slate-500 mt-2">
+                                Verified on: ${new Date(docsData.verified_at).toLocaleString()}
+                            </p>
+                        ` : ''}
+                    </div>
+                    
+                    ${ninHtml}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${documentsHtml}
+                    </div>
+                    
+                    <div class="mt-6 flex justify-end sticky bottom-0 bg-white pt-2 border-t">
+                        <button onclick="this.closest('#verificationDocsModal').remove()" class="px-6 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            
+        } catch (error) {
+            console.error('Error loading verification documents:', error);
+            showToast('Error loading verification documents', 'error');
+        } finally {
+            hideLoading();
+        }
     }
 
     function renderErrandsTab() {
@@ -2125,6 +2431,13 @@
                             <div class="bg-slate-50 rounded-lg p-3 max-h-48 overflow-y-auto">
                                 ${errandsList}
                             </div>
+                        </div>
+                        
+                        <div class="flex justify-end">
+                            <button onclick="window.adminDashboard?.viewVerificationDocuments('${escapeHtml(agentId)}')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                                <span class="material-symbols-outlined text-sm">folder</span>
+                                View Verification Documents
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2924,6 +3237,9 @@
         showAssignModal,
         viewCustomer,
         viewAgent,
+        viewVerificationDocuments,
+        viewPDF,              // Add PDF viewing function
+        downloadPDF,          // Add PDF download function
         viewErrand,
         editCustomer,
         editAgent,

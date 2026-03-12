@@ -6,7 +6,7 @@ import logging
 import hashlib
 import unicodedata
 import bcrypt
-
+from fastapi.responses import StreamingResponse
 from database import (
     users_collection,
     errands_collection,
@@ -1372,3 +1372,197 @@ async def delete_errand(
     logger.info(f"Admin {current_user['id']} deleted errand {errand_id}")
 
     return {"message": "Errand deleted successfully"}
+
+@router.get("/agents/{agent_id}/verification-documents")
+async def get_agent_verification_documents(
+    agent_id: str,
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Get verification documents submitted by an agent
+    """
+    if not validate_object_id(agent_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid agent ID format"
+        )
+
+    # Find the agent profile
+    profile = None
+    
+    # First try as user_id
+    profile = agent_profiles_collection.find_one({"user_id": agent_id})
+    
+    # If not found, try as profile _id
+    if not profile and validate_object_id(agent_id):
+        try:
+            profile = agent_profiles_collection.find_one({"_id": ObjectId(agent_id)})
+        except:
+            pass
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent profile not found"
+        )
+
+    documents = []
+    
+    # Document mapping based on your actual schema
+    document_fields = [
+        {
+            "url_field": "passport_photo_url",
+            "public_id_field": "passport_photo_public_id",
+            "label": "Passport Photograph",
+            "type": "passport"
+        },
+        {
+            "url_field": "nin_card_image_url",
+            "public_id_field": "nin_card_public_id",
+            "label": "NIN Card",
+            "type": "nin_card"
+        },
+        {
+            "url_field": "proof_of_address_url",
+            "public_id_field": "proof_of_address_public_id",
+            "label": "Proof of Address",
+            "type": "proof_of_address"
+        }
+    ]
+    
+    # Check each document field
+    for field in document_fields:
+        url = profile.get(field["url_field"])
+        if url:
+            doc = {
+                "type": field["type"],
+                "label": field["label"],
+                "url": url,
+                "public_id": profile.get(field["public_id_field"]),
+                "uploaded_at": profile.get("verification_submitted_at")
+            }
+            
+            # Check if it's a PDF (based on URL or public_id)
+            if url.lower().endswith('.pdf') or (profile.get(field["public_id_field"]) and 
+                                                profile.get(field["public_id_field"]).lower().endswith('.pdf')):
+                doc["is_pdf"] = True
+            
+            documents.append(doc)
+    
+    # Also check for any other URL fields that might contain documents
+    for key, value in profile.items():
+        if key.endswith('_url') and value and key not in [f["url_field"] for f in document_fields]:
+            # Skip if we already added it
+            if any(doc.get("url") == value for doc in documents):
+                continue
+                
+            # Generate label from key
+            label = key.replace('_url', '').replace('_', ' ').title()
+            
+            doc = {
+                "type": "other",
+                "label": label,
+                "url": value,
+                "public_id": profile.get(key.replace('_url', '_public_id')),
+                "uploaded_at": profile.get("verification_submitted_at")
+            }
+            
+            if value.lower().endswith('.pdf'):
+                doc["is_pdf"] = True
+            
+            documents.append(doc)
+    
+    return {
+        "agent_id": agent_id,
+        "verification_status": profile.get("verification_status", "not_submitted"),
+        "documents": documents,
+        "submitted_at": profile.get("verification_submitted_at"),
+        "verified_at": profile.get("verification_reviewed_at"),
+        "rejection_reason": profile.get("verification_rejection_reason"),
+        "nin_number": profile.get("nin_number")  # Include NIN if needed for reference
+    }
+
+@router.get("/agents/{agent_id}/download-document/{document_type}")
+async def download_agent_document(
+    agent_id: str,
+    document_type: str,
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Download agent verification document with proper filename and headers
+    """
+    # Find the agent profile
+    profile = None
+    
+    # Try as user_id first
+    profile = agent_profiles_collection.find_one({"user_id": agent_id})
+    
+    if not profile and validate_object_id(agent_id):
+        try:
+            profile = agent_profiles_collection.find_one({"_id": ObjectId(agent_id)})
+        except:
+            pass
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent profile not found"
+        )
+    
+    # Map document types to URL fields and filenames
+    doc_config = {
+        "passport": {
+            "url_field": "passport_photo_url",
+            "filename": f"passport_photo_{agent_id}.pdf"
+        },
+        "nin_card": {
+            "url_field": "nin_card_image_url",
+            "filename": f"nin_card_{agent_id}.pdf"
+        },
+        "proof_of_address": {
+            "url_field": "proof_of_address_url",
+            "filename": f"proof_of_address_{agent_id}.pdf"
+        }
+    }
+    
+    if document_type not in doc_config:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid document type"
+        )
+    
+    config = doc_config[document_type]
+    document_url = profile.get(config["url_field"])
+    
+    if not document_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # For Cloudinary URLs, we can proxy the request to set proper headers
+    try:
+        # Fetch the file from Cloudinary
+        response = requests.get(document_url, stream=True)
+        response.raise_for_status()
+        
+        # Get the content
+        content = response.content
+        
+        # Create a streaming response with proper headers
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={config['filename']}",
+                "Content-Type": "application/pdf",
+                "Content-Length": str(len(content))
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error downloading document"
+        )
